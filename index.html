@@ -4,91 +4,412 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1a1a2e">
     <title>🐍 Snake Game</title>
     <style>
-        /* ===================================== */
-        /* CSS RESET E BASE */
-        /* ===================================== */
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
-            width: 100%;
-            height: 100%;
+            width: 100%; height: 100%;
             overflow: hidden;
             background: #1a1a2e;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            font-family: system-ui, sans-serif;
             touch-action: none;
-            -webkit-touch-callout: none;
             -webkit-user-select: none;
             user-select: none;
-            -webkit-tap-highlight-color: transparent;
         }
-        
-        /* ===================================== */
-        /* CONTAINER DO JOGO */
-        /* ===================================== */
-        
         #game-container {
-            width: 100%;
-            height: 100%;
+            width: 100%; height: 100%;
             display: flex;
             justify-content: center;
             align-items: center;
-            position: relative;
         }
-        
-        /* ===================================== */
-        /* CANVAS */
-        /* ===================================== */
-        
-        canvas {
-            display: block !important;
-            touch-action: none !important;
-            image-rendering: -webkit-optimize-contrast;
-            image-rendering: crisp-edges;
-        }
-        
-        /* ===================================== */
-        /* PREVENIR SCROLL */
-        /* ===================================== */
-        
-        body {
-            overscroll-behavior: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-        }
-        
-        /* ===================================== */
-        /* ORIENTAÇÃO (mobile advice) */
-        /* ===================================== */
-        
-        @media screen and (orientation: portrait) {
-            /* Portrait mode - tudo ok */
-        }
-        
-        @media screen and (max-width: 320px) {
-            /* Telas muito pequenas */
-            body {
-                font-size: 12px;
-            }
-        }
+        canvas { display: block !important; }
     </style>
 </head>
 <body>
     <div id="game-container"></div>
-    
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
-    <script type="module" src="src/main.js"></script>
+    <script>
+const TILE_SIZE = 20;
+const GRID_WIDTH = 15;
+const GRID_HEIGHT = 11;
+
+const COLORS = {
+    background: 0x1a1a2e,
+    snakeHead: 0x3d6a4d,
+    snakeBody: 0x2d5a3d,
+    snakeEye: 0xeeeeee,
+    food: 0xff3344,
+    wall: 0x2d2d4a,
+    floor: 0x252540,
+    text: '#ffffff',
+    uiBg: '#000000aa'
+};
+
+const TILES = { EMPTY: 0, GROUND: 1, WALL: 2, DESTRUCTIBLE: 3 };
+
+let game, scene;
+let snake = [];
+let direction = { x: 1, y: 0 };
+let nextDirection = { x: 1, y: 0 };
+let foodPos = { x: 7, y: 5 };
+let score = 0;
+let highScore = 0;
+let gameOver = false;
+let isRunning = false;
+let lastMove = 0;
+let grid = [];
+let groundTiles = [];
+let objectTiles = [];
+
+function init() {
+    game = new Phaser.Game({
+        type: Phaser.AUTO,
+        parent: 'game-container',
+        width: 300,
+        height: 220,
+        backgroundColor: '#1a1a2e',
+        scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+        scene: { create: create, update: update }
+    });
+}
+
+function create() {
+    scene = this;
+    highScore = parseInt(localStorage.getItem('snake-highscore') || '0');
+    
+    initGrid();
+    createTextures();
+    createSnake();
+    spawnFood();
+    createUI();
+    showMenu();
+}
+
+function initGrid() {
+    grid = [];
+    groundTiles = [];
+    objectTiles = [];
+    
+    for (let y = 0; y < GRID_HEIGHT; y++) {
+        grid[y] = [];
+        groundTiles[y] = [];
+        objectTiles[y] = [];
+        for (let x = 0; x < GRID_WIDTH; x++) {
+            if (x === 0 || x === GRID_WIDTH - 1 || y === 0 || y === GRID_HEIGHT - 1) {
+                grid[y][x] = TILES.WALL;
+            } else if (x % 2 === 0 && y % 2 === 0) {
+                grid[y][x] = TILES.WALL;
+            } else {
+                grid[y][x] = TILES.GROUND;
+            }
+            groundTiles[y][x] = null;
+            objectTiles[y][x] = null;
+        }
+    }
+    
+    // Safe zone
+    grid[1][1] = grid[1][2] = grid[2][1] = TILES.GROUND;
+}
+
+function createTextures() {
+    // Floor texture
+    let g = scene.make.graphics();
+    g.fillStyle(COLORS.floor, 1);
+    g.fillRect(0, 0, 20, 20);
+    g.fillStyle(0x2a2a45, 0.4);
+    g.fillCircle(5, 5, 2);
+    g.fillCircle(15, 15, 2);
+    g.generateTexture('floor', 20, 20);
+    g.destroy();
+    
+    // Wall texture
+    g = scene.make.graphics();
+    g.fillStyle(COLORS.wall, 1);
+    g.fillRect(1, 1, 18, 18);
+    g.fillStyle(0x1d1d2a, 0.5);
+    g.fillRect(1, 14, 18, 5);
+    g.lineStyle(1, 0x000000, 0.3);
+    g.strokeRect(1, 1, 18, 18);
+    g.generateTexture('wall', 20, 20);
+    g.destroy();
+    
+    // Destructible
+    g = scene.make.graphics();
+    g.fillStyle(0x8b5a2b, 1);
+    g.fillRect(2, 2, 16, 16);
+    g.fillStyle(0x6b4a1b, 0.7);
+    g.fillRect(3, 3, 14, 12);
+    g.lineStyle(1, 0x000000, 0.4);
+    g.strokeRect(2, 2, 16, 16);
+    g.generateTexture('block', 20, 20);
+    g.destroy();
+    
+    // Snake head
+    g = scene.make.graphics();
+    g.fillStyle(COLORS.snakeHead, 1);
+    g.fillCircle(10, 10, 9);
+    g.fillStyle(0x4d7a5d, 0.4);
+    g.fillCircle(8, 8, 4);
+    g.fillStyle(COLORS.snakeEye, 1);
+    g.fillCircle(7, 8, 3);
+    g.fillCircle(13, 8, 3);
+    g.fillStyle(0x111111, 1);
+    g.fillCircle(7, 9, 2);
+    g.fillCircle(13, 9, 2);
+    g.generateTexture('snake_head', 20, 20);
+    g.destroy();
+    
+    // Snake body
+    g = scene.make.graphics();
+    g.fillStyle(COLORS.snakeBody, 1);
+    g.fillCircle(10, 10, 8);
+    g.fillStyle(0x4d7a5d, 0.25);
+    g.fillCircle(7, 7, 2);
+    g.fillCircle(13, 13, 2);
+    g.generateTexture('snake_body', 20, 20);
+    g.destroy();
+    
+    // Food
+    g = scene.make.graphics();
+    g.fillStyle(COLORS.food, 1);
+    g.fillCircle(10, 10, 7);
+    g.fillStyle(0xff5566, 0.6);
+    g.fillCircle(8, 8, 4);
+    g.fillStyle(0xffffff, 0.5);
+    g.fillCircle(7, 6, 2);
+    g.lineStyle(1, 0x000000, 0.3);
+    g.strokeCircle(10, 10, 7);
+    g.generateTexture('food', 20, 20);
+    g.destroy();
+    
+    // Render grid
+    for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
+            const px = x * TILE_SIZE + 10;
+            const py = y * TILE_SIZE + 10;
+            
+            let tile = scene.add.image(px, py, 'floor');
+            tile.setOrigin(0, 0);
+            groundTiles[y][x] = tile;
+            
+            if (grid[y][x] === TILES.WALL) {
+                let wall = scene.add.image(px, py, 'wall');
+                wall.setOrigin(0, 0);
+                wall.setDepth(5);
+                objectTiles[y][x] = wall;
+            }
+        }
+    }
+}
+
+function createSnake() {
+    snake = [];
+    for (let i = 2; i >= 0; i--) {
+        const gx = 5 - i;
+        const gy = 5;
+        const px = gx * TILE_SIZE + 10;
+        const py = gy * TILE_SIZE + 10;
+        
+        let sprite = scene.add.image(px, py, i === 0 ? 'snake_head' : 'snake_body');
+        sprite.setOrigin(0, 0);
+        sprite.setDepth(20);
+        
+        snake.push({ gridX: gx, gridY: gy, sprite: sprite });
+    }
+    direction = { x: 1, y: 0 };
+    nextDirection = { x: 1, y: 0 };
+}
+
+function spawnFood() {
+    let valid = false;
+    while (!valid) {
+        foodPos.x = Math.floor(Math.random() * (GRID_WIDTH - 2)) + 1;
+        foodPos.y = Math.floor(Math.random() * (GRID_HEIGHT - 2)) + 1;
+        
+        valid = grid[foodPos.y][foodPos.x] === TILES.GROUND;
+        for (let s of snake) {
+            if (s.gridX === foodPos.x && s.gridY === foodPos.y) {
+                valid = false;
+                break;
+            }
+        }
+    }
+}
+
+function createUI() {
+    // Score text
+    scene.scoreText = scene.add.text(10, 5, 'Score: 0', {
+        fontSize: '12px', color: '#ffffff', fontFamily: 'system-ui'
+    });
+    scene.scoreText.setDepth(50);
+    
+    // Menu
+    scene.menuContainer = scene.add.container(150, 110);
+    scene.menuContainer.setDepth(100);
+    
+    let bg = scene.add.rectangle(0, 0, 200, 120, 0x000000, 0.8);
+    bg.setOrigin(0.5, 0.5);
+    scene.menuContainer.add(bg);
+    
+    let title = scene.add.text(0, -40, '🐍 SNAKE', {
+        fontSize: '24px', color: '#ffffff', fontFamily: 'system-ui', fontStyle: 'bold'
+    });
+    title.setOrigin(0.5);
+    scene.menuContainer.add(title);
+    
+    let startText = scene.add.text(0, 0, 'Tap to Start', {
+        fontSize: '14px', color: '#aaaaaa', fontFamily: 'system-ui'
+    });
+    startText.setOrigin(0.5);
+    scene.menuContainer.add(startText);
+    
+    let highText = scene.add.text(0, 30, 'High: ' + highScore, {
+        fontSize: '12px', color: '#888888', fontFamily: 'system-ui'
+    });
+    highText.setOrigin(0.5);
+    scene.menuContainer.add(highText);
+}
+
+function showMenu() {
+    if (scene.menuContainer) scene.menuContainer.setVisible(true);
+    if (scene.scoreText) scene.scoreText.setText('Score: ' + score);
+}
+
+function hideMenu() {
+    if (scene.menuContainer) scene.menuContainer.setVisible(false);
+}
+
+function update(time, delta) {
+    if (gameOver || !isRunning) return;
+    
+    // Input
+    if (scene.input.keyboard) {
+        const keys = scene.input.keyboard.createCursorKeys();
+        if (keys.left?.isDown && direction.x !== 1) nextDirection = { x: -1, y: 0 };
+        else if (keys.right?.isDown && direction.x !== -1) nextDirection = { x: 1, y: 0 };
+        else if (keys.up?.isDown && direction.y !== 1) nextDirection = { x: 0, y: -1 };
+        else if (keys.down?.isDown && direction.y !== -1) nextDirection = { x: 0, y: 1 };
+    }
+    
+    // Move
+    const moveInterval = Math.max(80, 150 - snake.length);
+    if (time > lastMove + moveInterval) {
+        lastMove = time;
+        moveSnake();
+    }
+}
+
+function moveSnake() {
+    direction = { ...nextDirection };
+    
+    const head = snake[0];
+    const newX = head.gridX + direction.x;
+    const newY = head.gridY + direction.y;
+    
+    // Wall collision
+    if (!grid[newY] || grid[newY][newX] === TILES.WALL) {
+        endGame();
+        return;
+    }
+    
+    // Self collision
+    for (let i = 1; i < snake.length; i++) {
+        if (snake[i].gridX === newX && snake[i].gridY === newY) {
+            endGame();
+            return;
+        }
+    }
+    
+    const ate = (newX === foodPos.x && newY === foodPos.y);
+    
+    if (ate) {
+        score += 10;
+        scene.scoreText.setText('Score: ' + score);
+        
+        // Add segment
+        const tail = snake[snake.length - 1];
+        const px = tail.gridX * TILE_SIZE + 10;
+        const py = tail.gridY * TILE_SIZE + 10;
+        let sprite = scene.add.image(px, py, 'snake_body');
+        sprite.setOrigin(0, 0);
+        sprite.setDepth(20);
+        snake.push({ gridX: tail.gridX, gridY: tail.gridY, sprite: sprite });
+        
+        spawnFood();
+    }
+    
+    // Move body
+    for (let i = snake.length - 1; i > 0; i--) {
+        snake[i].gridX = snake[i - 1].gridX;
+        snake[i].gridY = snake[i - 1].gridY;
+    }
+    snake[0].gridX = newX;
+    snake[0].gridY = newY;
+    
+    // Update sprites
+    const duration = moveInterval * 0.7;
+    for (let i = 0; i < snake.length; i++) {
+        const px = snake[i].gridX * TILE_SIZE + 10;
+        const py = snake[i].gridY * TILE_SIZE + 10;
+        scene.tweens.add({
+            targets: snake[i].sprite,
+            x: px, y: py,
+            duration: duration,
+            ease: 'Linear'
+        });
+    }
+}
+
+function endGame() {
+    gameOver = true;
+    isRunning = false;
+    
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('snake-highscore', highScore.toString());
+    }
+    
+    scene.cameras.main.shake(200, 0.01);
+    showMenu();
+}
+
+// Input
+document.addEventListener('keydown', (e) => {
+    if (!isRunning && (e.key === 'Enter' || e.key === ' ')) {
+        startGame();
+        return;
+    }
+    if (!isRunning) return;
+    
+    if (e.key === 'ArrowLeft' || e.key === 'a') direction = { x: -1, y: 0 };
+    else if (e.key === 'ArrowRight' || e.key === 'd') direction = { x: 1, y: 0 };
+    else if (e.key === 'ArrowUp' || e.key === 'w') direction = { x: 0, y: -1 };
+    else if (e.key === 'ArrowDown' || e.key === 's') direction = { x: 0, y: 1 };
+});
+
+document.addEventListener('pointerdown', () => {
+    if (!isRunning) startGame();
+});
+
+function startGame() {
+    if (isRunning) return;
+    
+    score = 0;
+    gameOver = false;
+    isRunning = true;
+    lastMove = 0;
+    
+    // Reset snake
+    snake.forEach(s => s.sprite.destroy());
+    createSnake();
+    spawnFood();
+    scene.scoreText.setText('Score: 0');
+    hideMenu();
+}
+
+// Start
+init();
+    </script>
 </body>
 </html>
