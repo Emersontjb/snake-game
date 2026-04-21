@@ -1,12 +1,13 @@
 /**
  * =====================================
- * UI MANAGER - GERENCIADOR DE UI
+ * UI MANAGER - INTERFACE COMPLETA
  * =====================================
  * 
  * Gerencia toda a interface do usuário:
  * - HUD (score, nível)
- * - Menus
- * - Feedback visual
+ * - Menus (início, game over)
+ * - Feedback visual (level up)
+ * - Orientação responsiva
  */
 
 import GameConfig from './GameConfig.js';
@@ -14,11 +15,12 @@ import GameConfig from './GameConfig.js';
 export default class UIManager {
     constructor(scene) {
         this.scene = scene;
-        this.menuActive = false;
+        
         this.menuContainer = null;
+        this.gameOverContainer = null;
+        
         this.scoreText = null;
         this.levelText = null;
-        this.hudContainer = null;
         
         this.createHUD();
     }
@@ -26,28 +28,20 @@ export default class UIManager {
     createHUD() {
         const gameWidth = GameConfig.GAME_WIDTH;
         
-        // Container do HUD
         this.hudContainer = this.scene.add.container(0, 0);
         
-        // Fundo do HUD
         const hudBg = this.scene.add.graphics();
-        hudBg.fillStyle(0x000000, 0.7);
-        hudBg.fillRect(0, 0, gameWidth, 45);
+        hudBg.fillStyle(0x000000, 0.6);
+        hudBg.fillRect(0, 0, gameWidth, 42);
         
-        this.hudContainer.add(hudBg);
-        
-        // Score
-        this.scoreText = this.scene.add.text(20, 12, 'SCORE: 0', {
+        this.scoreText = this.scene.add.text(15, 10, 'SCORE: 0', {
             fontSize: '18px',
             fontFamily: 'Arial',
             fontStyle: 'bold',
             color: '#00ff88'
         });
         
-        this.hudContainer.add(this.scoreText);
-        
-        // Level
-        this.levelText = this.scene.add.text(gameWidth - 20, 12, 'NÍVEL: 1', {
+        this.levelText = this.scene.add.text(gameWidth - 15, 10, 'NÍVEL: 1', {
             fontSize: '18px',
             fontFamily: 'Arial',
             fontStyle: 'bold',
@@ -55,7 +49,7 @@ export default class UIManager {
         });
         this.levelText.setOrigin(1, 0);
         
-        this.hudContainer.add(this.levelText);
+        this.hudContainer.add([hudBg, this.scoreText, this.levelText]);
     }
     
     updateScore(score) {
@@ -73,74 +67,78 @@ export default class UIManager {
     showMenu(highScore) {
         this.menuActive = true;
         
+        const scene = this.scene;
         const gameWidth = GameConfig.GAME_WIDTH;
         const gameHeight = GameConfig.GAME_HEIGHT;
-        const centerX = gameWidth / 2;
-        const centerY = gameHeight / 2;
         
-        // Container do menu
-        this.menuContainer = this.scene.add.container(centerX, centerY);
+        scene.input.once('pointerdown', () => {
+            this.hideMenu();
+            scene.startGame();
+        });
         
-        // Fundo semi-transparente
-        const overlay = this.scene.add.rectangle(0, 0, gameWidth, gameHeight, 0x000000, 0.8);
+        scene.input.keyboard.once('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                this.hideMenu();
+                scene.startGame();
+            }
+        });
         
-        // Painel do menu
-        const panelWidth = 280;
-        const panelHeight = 250;
-        const panel = this.scene.add.graphics();
-        panel.fillStyle(GameConfig.COLORS.UI_PANEL, 1);
+        this.menuContainer = scene.add.container(gameWidth / 2, gameHeight / 2);
+        
+        const overlay = scene.add.rectangle(0, 0, gameWidth, gameHeight, 0x000000, 0);
+        
+        const panelWidth = 260;
+        const panelHeight = 220;
+        
+        const panel = scene.add.graphics();
+        panel.fillStyle(GameConfig.COLORS.UI_PANEL, 0.95);
         panel.fillRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 16);
         panel.lineStyle(3, GameConfig.COLORS.UI_PRIMARY, 1);
         panel.strokeRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 16);
         
-        // Título
-        const title = this.scene.add.text(0, -90, '🐍 SNAKE', {
-            fontSize: '36px',
+        const title = scene.add.text(0, -70, '🐍 SNAKE', {
+            fontSize: '32px',
             fontFamily: 'Arial',
             fontStyle: 'bold',
             color: '#00ff88'
         });
         title.setOrigin(0.5);
         
-        // Instruções
-        const instructions = this.scene.add.text(0, -30, 'Toque ou clique\npara jogar!', {
-            fontSize: '18px',
+        const instructions = scene.add.text(0, -20, 'Toque ou Enter\npara jogar', {
+            fontSize: '15px',
             fontFamily: 'Arial',
-            color: '#ffffff',
+            color: '#aaaaaa',
             align: 'center',
-            lineSpacing: 10
+            lineSpacing: 6
         });
         instructions.setOrigin(0.5);
         
-        // High Score
-        const highScoreText = this.scene.add.text(0, 50, 'RECORDE: ' + highScore, {
-            fontSize: '16px',
+        const highScoreText = scene.add.text(0, 30, 'RECORDE: ' + highScore, {
+            fontSize: '14px',
             fontFamily: 'Arial',
             color: '#888888'
         });
         highScoreText.setOrigin(0.5);
         
-        // Botão (visual)
-        const playBtn = this.scene.add.text(0, 85, '[ JOGAR ]', {
-            fontSize: '22px',
+        const playText = scene.add.text(0, 65, '[ COMEÇAR ]', {
+            fontSize: '18px',
             fontFamily: 'Arial',
             fontStyle: 'bold',
             color: '#00ff88'
         });
-        playBtn.setOrigin(0.5);
+        playText.setOrigin(0.5);
         
-        // Animação do botão
-        this.scene.tweens.add({
-            targets: playBtn,
+        scene.tweens.add({
+            targets: playText,
             scaleX: 1.1,
             scaleY: 1.1,
-            duration: 500,
+            duration: 600,
             yoyo: true,
-            repeat: -1
+            repeat: -1,
+            ease: 'Sine.easeInOut'
         });
         
-        // Adicionar ao container
-        this.menuContainer.add([overlay, panel, title, instructions, highScoreText, playBtn]);
+        this.menuContainer.add([overlay, panel, title, instructions, highScoreText, playText]);
     }
     
     hideMenu() {
@@ -152,11 +150,12 @@ export default class UIManager {
     }
     
     showLevelUp(level) {
-        const centerX = GameConfig.GAME_WIDTH / 2;
-        const centerY = GameConfig.GAME_HEIGHT / 2;
+        const scene = this.scene;
+        const gameWidth = GameConfig.GAME_WIDTH;
+        const gameHeight = GameConfig.GAME_HEIGHT;
         
-        const text = this.scene.add.text(centerX, centerY, 'NÍVEL ' + level + '!', {
-            fontSize: '32px',
+        const text = scene.add.text(gameWidth / 2, gameHeight / 2, 'NÍVEL ' + level + '!', {
+            fontSize: '28px',
             fontFamily: 'Arial',
             fontStyle: 'bold',
             color: '#00ff88'
@@ -164,18 +163,20 @@ export default class UIManager {
         text.setOrigin(0.5);
         text.setAlpha(0);
         
-        this.scene.tweens.add({
+        scene.tweens.add({
             targets: text,
             alpha: 1,
-            y: centerY - 50,
+            y: gameHeight / 2 - 40,
+            scale: 1.2,
             duration: 300,
             ease: 'Cubic.easeOut',
             onComplete: () => {
-                this.scene.tweens.add({
+                scene.tweens.add({
                     targets: text,
                     alpha: 0,
-                    duration: 500,
-                    delay: 500,
+                    scale: 1,
+                    duration: 400,
+                    delay: 800,
                     ease: 'Cubic.easeIn',
                     onComplete: () => text.destroy()
                 });
@@ -184,70 +185,77 @@ export default class UIManager {
     }
     
     showGameOver(score, highScore) {
+        const scene = this.scene;
         const gameWidth = GameConfig.GAME_WIDTH;
         const gameHeight = GameConfig.GAME_HEIGHT;
-        const centerX = gameWidth / 2;
-        const centerY = gameHeight / 2;
         
-        // Container
-        const container = this.scene.add.container(centerX, centerY);
+        this.gameOverContainer = scene.add.container(gameWidth / 2, gameHeight / 2);
         
-        // Fundo
-        const overlay = this.scene.add.rectangle(0, 0, gameWidth, gameHeight, 0x000000, 0.85);
+        const overlay = scene.add.rectangle(0, 0, gameWidth, gameHeight, 0x000000, 0);
         
-        // Painel
-        const panelWidth = 280;
-        const panelHeight = 220;
-        const panel = this.scene.add.graphics();
-        panel.fillStyle(GameConfig.COLORS.UI_PANEL, 1);
+        const panelWidth = 260;
+        const panelHeight = 200;
+        
+        const panel = scene.add.graphics();
+        panel.fillStyle(GameConfig.COLORS.UI_PANEL, 0.95);
         panel.fillRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 16);
-        panel.lineStyle(3, 0xff6b6b, 1);
+        panel.lineStyle(3, GameConfig.COLORS.UI_DANGER, 1);
         panel.strokeRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 16);
         
-        // Título
-        const title = this.scene.add.text(0, -85, 'GAME OVER', {
-            fontSize: '32px',
+        const title = scene.add.text(0, -70, '💀 GAME OVER', {
+            fontSize: '26px',
             fontFamily: 'Arial',
             fontStyle: 'bold',
-            color: '#ff6b6b'
+            color: '#ff4757'
         });
         title.setOrigin(0.5);
         
-        // Score
-        const scoreText = this.scene.add.text(0, -30, 'Pontuação: ' + score, {
-            fontSize: '20px',
+        const scoreText = scene.add.text(0, -25, 'Pontos: ' + score, {
+            fontSize: '18px',
             fontFamily: 'Arial',
             color: '#ffffff'
         });
         scoreText.setOrigin(0.5);
         
-        // High Score
-        const isNewRecord = score >= highScore;
-        const highScoreText = this.scene.add.text(0, 15, isNewRecord ? '🎉 NOVO RECORDE!' : 'Recorde: ' + highScore, {
-            fontSize: '18px',
+        const isNewRecord = score >= highScore && score > 0;
+        const recordText = scene.add.text(0, 15, isNewRecord ? '🎉 NOVO RECORDE!' : 'Recorde: ' + highScore, {
+            fontSize: '15px',
             fontFamily: 'Arial',
             color: isNewRecord ? '#00ff88' : '#888888'
         });
-        highScoreText.setOrigin(0.5);
+        recordText.setOrigin(0.5);
         
-        // Instruções
-        const retryText = this.scene.add.text(0, 70, 'Toque para tentar\nnovamente', {
-            fontSize: '14px',
+        const retryText = scene.add.text(0, 60, 'Toque para\ntentar novamente', {
+            fontSize: '13px',
             fontFamily: 'Arial',
-            color: '#888888',
+            color: '#666666',
             align: 'center',
-            lineSpacing: 8
+            lineSpacing: 5
         });
         retryText.setOrigin(0.5);
         
-        container.add([overlay, panel, title, scoreText, highScoreText, retryText]);
+        this.gameOverContainer.add([overlay, panel, title, scoreText, recordText, retryText]);
         
-        // Listener para restart
-        this.scene.time.delayedCall(500, () => {
-            this.scene.input.once('pointerdown', () => {
-                container.destroy();
-                this.scene.showMenu();
+        scene.time.delayedCall(500, () => {
+            const restartHandler = () => {
+                this.hideGameOver();
+                this.showMenu(highScore);
+            };
+            
+            scene.input.once('pointerdown', restartHandler);
+            
+            scene.input.keyboard.once('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    restartHandler();
+                }
             });
         });
+    }
+    
+    hideGameOver() {
+        if (this.gameOverContainer) {
+            this.gameOverContainer.destroy();
+            this.gameOverContainer = null;
+        }
     }
 }

@@ -1,10 +1,7 @@
 /**
  * =====================================
- * FOOD - CLASSE DA COMIDA
+ * FOOD - CLASSE DA COMIDA COM ANIMAÇÃO
  * =====================================
- * 
- * Gerencia a comida: rendering,
- * animação e efeito visual.
  */
 
 import GameConfig from './GameConfig.js';
@@ -18,6 +15,8 @@ export default class Food {
         this.graphics = scene.add.graphics();
         this.glowGraphics = scene.add.graphics();
         this.visible = false;
+        
+        this.animationPhase = 0;
     }
     
     spawn(x, y) {
@@ -25,15 +24,20 @@ export default class Food {
         this.y = y;
         this.visible = true;
         
-        // Animação de spawn
-        this.scale = 0;
         this.scene.tweens.add({
             targets: this,
             scale: 1,
-            duration: 200,
+            duration: GameConfig.ANIMATIONS.FOOD_SPAWN_DURATION,
             ease: 'Back.easeOut'
         });
         
+        this.render();
+    }
+    
+    update(time) {
+        if (!this.visible) return;
+        
+        this.animationPhase += 0.1;
         this.render();
     }
     
@@ -44,16 +48,17 @@ export default class Food {
         const padding = 3;
         const foodSize = size - padding * 2;
         
-        // Glow (efeito de brilho pulsante)
+        const pulse = Math.sin(this.animationPhase) * 0.15 + 0.85;
+        const glowSize = foodSize / 2 + 4 + Math.sin(this.animationPhase * 2) * 2;
+        
         this.glowGraphics.clear();
-        this.glowGraphics.fillStyle(GameConfig.COLORS.FOOD_GLOW, 0.3);
+        this.glowGraphics.fillStyle(GameConfig.COLORS.FOOD_GLOW, 0.25 * pulse);
         this.glowGraphics.fillCircle(
             this.x + size / 2,
             this.y + size / 2,
-            foodSize / 2 + 4 + Math.sin(this.scene.time.now / 200) * 2
+            glowSize
         );
         
-        // Corpo da comida
         this.graphics.clear();
         this.graphics.fillStyle(GameConfig.COLORS.FOOD, 1);
         this.graphics.fillCircle(
@@ -62,8 +67,7 @@ export default class Food {
             foodSize / 2
         );
         
-        // Brilho central
-        this.graphics.fillStyle(0xffffff, 0.5);
+        this.graphics.fillStyle(GameConfig.COLORS.FOOD_SHINE, 0.6);
         this.graphics.fillCircle(
             this.x + size / 2 - 2,
             this.y + size / 2 - 2,
@@ -71,32 +75,11 @@ export default class Food {
         );
     }
     
-    getX() {
-        return this.x;
-    }
-    
-    getY() {
-        return this.y;
-    }
+    getX() { return this.x; }
+    getY() { return this.y; }
     
     destroy() {
         this.graphics.destroy();
         this.glowGraphics.destroy();
     }
 }
-
-//工厂函数 para criar comida estática (para o Obstacle)
-Food.create = function(scene, x, y, group) {
-    const food = group.create(x, y, null);
-    food.setSize(GameConfig.GRID_SIZE - 4, GameConfig.GRID_SIZE - 4);
-    
-    const graphics = scene.add.graphics();
-    graphics.fillStyle(GameConfig.COLORS.FOOD, 1);
-    graphics.fillCircle(
-        x + GameConfig.GRID_SIZE / 2,
-        y + GameConfig.GRID_SIZE / 2,
-        (GameConfig.GRID_SIZE - 4) / 2
-    );
-    
-    return food;
-};
