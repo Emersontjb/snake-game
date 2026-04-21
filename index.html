@@ -59,7 +59,6 @@
             color: #000;
         }
         
-        /* Botão música */
         #btnMusica {
             position: fixed;
             top: 10px;
@@ -109,16 +108,13 @@ var musicaTocando = false;
 var musicaInterval = null;
 var notaAtual = 0;
 
-// Notas musicais (frequências em Hz)
 const NOTAS = {
     C3: 131, D3: 147, E3: 165, F3: 175, G3: 196, A3: 220, B3: 247,
     C4: 262, D4: 294, E4: 330, F4: 349, G4: 392, A4: 440, B4: 494,
-    C5: 523, D5: 587, E5: 659, F5: 698, G5: 784, A5: 880, B5: 988,
-    C6: 1047, D6: 1175, E6: 1319, F6: 1397, G6: 1568
+    C5: 523, D5: 587, E5: 659, F5: 698, G5: 784, A5: 880,
+    C6: 1047, D6: 1175, E6: 1319, F6: 1397
 };
 
-// Melodia Tetris (direito autoral - exemplo educativo)
-// Usando melodia própria estilo 80s
 var MELODIA = [
     { n: 'E4', d: 200 }, { n: 'B3', d: 100 }, { n: 'C4', d: 200 }, { n: 'D4', d: 100 },
     { n: 'C4', d: 200 }, { n: 'B3', d: 100 }, { n: 'A3', d: 200 }, { n: 'A3', d: 100 },
@@ -130,7 +126,6 @@ var MELODIA = [
     { n: 'G3', d: 400 }
 ];
 
-// Segunda melodia (mais energética)
 var MELODIA2 = [
     { n: 'G4', d: 150 }, { n: 'G4', d: 150 }, { n: 'C4', d: 300 },
     { n: 'G4', d: 150 }, { n: 'G4', d: 150 }, { n: 'C4', d: 300 },
@@ -151,27 +146,20 @@ function initAudio() {
 
 function tocarNota(freq, duracao, tipo) {
     if (!audioCtx) return;
-    
     var osc = audioCtx.createOscillator();
     var gain = audioCtx.createGain();
-    
     osc.connect(gain);
     gain.connect(audioCtx.destination);
-    
     osc.type = tipo || 'square';
     osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    
     gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duracao / 1000);
-    
     osc.start(audioCtx.currentTime);
     osc.stop(audioCtx.currentTime + duracao / 1000);
 }
 
-// Música de fundo
 function iniciarMusica() {
     if (musicaTocando) return;
-    
     initAudio();
     musicaTocando = true;
     notaAtual = 0;
@@ -181,14 +169,11 @@ function iniciarMusica() {
 
 function reproduzirMelodia() {
     if (!musicaTocando) return;
-    
     var melodia = Math.random() > 0.5 ? MELODIA : MELODIA2;
     var nota = melodia[notaAtual % melodia.length];
-    
     if (NOTAS[nota.n]) {
         tocarNota(NOTAS[nota.n], nota.d, 'square');
     }
-    
     notaAtual++;
     musicaInterval = setTimeout(reproduzirMelodia, nota.d);
 }
@@ -211,17 +196,16 @@ function toggleMusica() {
     }
 }
 
-// Sons do jogo
 function somComer() {
     if (!audioCtx) return;
-    tocarNota(440, 80, 'square');
-    setTimeout(function() { tocarNota(660, 80, 'square'); }, 40);
-    setTimeout(function() { tocarNota(880, 120, 'square'); }, 80);
+    tocarNota(440, 60, 'square');
+    setTimeout(function() { tocarNota(660, 60, 'square'); }, 30);
+    setTimeout(function() { tocarNota(880, 80, 'square'); }, 60);
 }
 
 function somMover() {
     if (!audioCtx) return;
-    tocarNota(220, 40, 'square');
+    tocarNota(180, 30, 'triangle');
 }
 
 function somGameOver() {
@@ -234,28 +218,28 @@ function somGameOver() {
 
 function somInicio() {
     if (!audioCtx) return;
-    tocarNota(262, 100, 'square');
-    setTimeout(function() { tocarNota(330, 100, 'square'); }, 100);
-    setTimeout(function() { tocarNota(392, 100, 'square'); }, 200);
-    setTimeout(function() { tocarNota(523, 200, 'square'); }, 300);
+    tocarNota(262, 80, 'square');
+    setTimeout(function() { tocarNota(330, 80, 'square'); }, 80);
+    setTimeout(function() { tocarNota(392, 80, 'square'); }, 160);
+    setTimeout(function() { tocarNota(523, 150, 'square'); }, 240);
 }
 
 function somLevelUp() {
     if (!audioCtx) return;
     var notas = [523, 659, 784, 1047];
     notas.forEach(function(n, i) {
-        setTimeout(function() { tocarNota(n, 150, 'square'); }, i * 100);
+        setTimeout(function() { tocarNota(n, 120, 'square'); }, i * 80);
     });
 }
 
 // =====================================
-// JOGO
+// JOGO COM POLISH SÊNIOR
 // =====================================
 
 const TAMANHO = 20;
 const COLUNAS = 15;
 const LINHAS = 11;
-const TILE = { VAZIO: 0, CHAO: 1, PAREDE: 2 };
+const TILE = { CHAO: 0, PAREDE: 1 };
 
 let scene;
 let cobra = [];
@@ -267,15 +251,30 @@ let recorde = 0;
 let nivel = 1;
 let fimDeJogo = false;
 let jogando = false;
-let ultimoMovimento = 0;
 let grid = [];
 let comidaSprite = null;
 let menuContainer = null;
 let nivelTexto = null;
 let pontuacaoTexto = null;
-let intervalo = 150;
 
-// Iniciar audio com primeiro toque
+// POLISH: Configurações de手感
+const POLISH = {
+    // Movimento
+    lerpFactor: 0.2,           // Suavização do movimento
+    overshoot: 0.15,           // Overshoot ao mudar direção
+    squashAmount: 0.12,          // Squash & stretch
+    bodyFollowDelay: 0.08,      // Delay do corpo seguindo
+    
+    // Feedback
+    screenShakeIntensity: 0.008,
+    foodBounceAmount: 0.3,
+    eatScaleBoost: 1.4,
+    eatParticleCount: 12
+};
+
+// Posições TARGET para lerp
+let targetPositions = [];
+
 document.addEventListener('click', initAudio, { once: true });
 document.addEventListener('touchstart', initAudio, { once: true });
 
@@ -352,7 +351,7 @@ function criarTexturas() {
     g.fillRect(11, 11, 6, 6);
     g.generateTexture('parede', 20, 20);
     
-    // Cabeça
+    // Cabeça com mais detalhes
     g.clear();
     g.fillStyle(0x00ff00, 1);
     g.fillRect(2, 2, 16, 16);
@@ -362,6 +361,9 @@ function criarTexturas() {
     g.fillStyle(0x000000, 1);
     g.fillRect(5, 6, 3, 3);
     g.fillRect(12, 6, 3, 3);
+    // Brilho
+    g.fillStyle(0x88ff88, 0.6);
+    g.fillRect(3, 3, 2, 2);
     g.generateTexture('cabeca', 20, 20);
     
     // Corpo
@@ -372,7 +374,7 @@ function criarTexturas() {
     g.strokeRect(3, 3, 14, 14);
     g.generateTexture('corpo', 20, 20);
     
-    // Comida normal
+    // Comida com bounce
     g.clear();
     g.fillStyle(0xff0000, 1);
     g.fillCircle(10, 10, 6);
@@ -432,15 +434,34 @@ function desenharGrid() {
 
 function criarCobra() {
     cobra = [];
+    targetPositions = [];
+    
     for (var i = 2; i >= 0; i--) {
-        var px = (5 - i) * TAMANHO + 10;
-        var py = 5 * TAMANHO + 10;
+        var gx = 5 - i;
+        var gy = 5;
+        var px = gx * TAMANHO + 10;
+        var py = gy * TAMANHO + 10;
         var tex = i === 0 ? 'cabeca' : 'corpo';
         var sprite = scene.add.image(px, py, tex);
         sprite.setOrigin(0, 0);
         sprite.setDepth(20);
-        cobra.push({ x: 5 - i, y: 5, sprite: sprite });
+        
+        cobra.push({
+            x: gx,
+            y: gy,
+            sprite: sprite,
+            currentX: px,
+            currentY: py,
+            targetX: px,
+            targetY: py,
+            scaleX: 1,
+            scaleY: 1,
+            rotation: 0
+        });
+        
+        targetPositions.push({ x: px, y: py });
     }
+    
     direcao = { x: 1, y: 0 };
     proximaDirecao = { x: 1, y: 0 };
 }
@@ -527,19 +548,51 @@ function criarInterface() {
 function mostrarMenu() { if (menuContainer) menuContainer.setVisible(true); }
 function esconderMenu() { if (menuContainer) menuContainer.setVisible(false); }
 
-function atualizar(tempo) {
+function atualizar(tempo, delta) {
     if (fimDeJogo || !jogando) return;
     
-    intervalo = Math.max(80, 150 - cobra.length * 2);
-    if (tempo > ultimoMovimento + intervalo) {
-        ultimoMovimento = tempo;
-        moverCobra();
+    // POLISH: Atualização suave do movimento
+    atualizarMovimentoSuave(delta);
+    
+    // Animação da comida
+    if (comidaSprite) {
+        var bounce = 1 + Math.sin(tempo / 200) * POLISH.foodBounceAmount;
+        comidaSprite.setScale(bounce);
     }
     
-    if (comidaSprite) {
-        comidaSprite.setScale(1 + Math.sin(tempo / 200) * 0.15);
+    // POLISH: Idle micro-animação nos segmentos
+    cobra.forEach(function(seg, i) {
+        if (i > 0) { // Não na cabeça
+            var idleScale = 1 + Math.sin(tempo / 300 + i * 0.5) * 0.03;
+            seg.sprite.setScale(seg.scaleX * idleScale, seg.scaleY * idleScale);
+        }
+    });
+}
+
+function atualizarMovimentoSuave(delta) {
+    var lerp = POLISH.lerpFactor;
+    
+    for (var i = 0; i < cobra.length; i++) {
+        var seg = cobra[i];
+        
+        // LERP suave para posição
+        seg.currentX += (seg.targetX - seg.currentX) * lerp;
+        seg.currentY += (seg.targetY - seg.currentY) * lerp;
+        
+        // Aplicar posição com pequena margem para organicidade
+        var offsetX = Math.sin(Date.now() / 500 + i) * 0.3;
+        var offsetY = Math.cos(Date.now() / 500 + i * 0.7) * 0.3;
+        
+        seg.sprite.x = seg.currentX + offsetX;
+        seg.sprite.y = seg.currentY + offsetY;
+        
+        // LERP para scale (squash & stretch)
+        seg.scaleX += (1 - seg.scaleX) * 0.15;
+        seg.scaleY += (1 - seg.scaleY) * 0.15;
     }
 }
+
+var ultimoMovimento = 0;
 
 function moverCobra() {
     direcao = { x: proximaDirecao.x, y: proximaDirecao.y };
@@ -548,6 +601,7 @@ function moverCobra() {
     var novoX = cabeca.x + direcao.x;
     var novoY = cabeca.y + direcao.y;
     
+    // Verificar colisão
     if (novoX < 0 || novoX >= COLUNAS || novoY < 0 || novoY >= LINHAS) {
         terminarJogo();
         return;
@@ -568,12 +622,23 @@ function moverCobra() {
     
     var comeu = (novoX === comidaPos.x && novoY === comidaPos.y);
     
+    // POLISH: Antecipar movimento da cabeça com overshoot
     if (comeu) {
         pontuacao += 10;
         somComer();
         if (pontuacaoTexto) pontuacaoTexto.setText('PONTOS: ' + pontuacao);
         
-        // Subir de nível
+        // Efeito de comer
+        criarEfeitoComida(comidaPos.x, comidaPos.y);
+        criarParticulasComer(comidaPos.x, comidaPos.y);
+        
+        // Squash na cabeça
+        var head = cobra[0];
+        head.scaleX = POLISH.eatScaleBoost;
+        head.scaleY = 1 / POLISH.eatScaleBoost;
+        head.sprite.setScale(head.scaleX, head.scaleY);
+        
+        // Subir nível
         if (pontuacao % 50 === 0) {
             nivel++;
             somLevelUp();
@@ -581,70 +646,130 @@ function moverCobra() {
             criarEfeitoNivel(cabeca.x, cabeca.y);
         }
         
-        criarEfeitoComida(comidaPos.x, comidaPos.y);
-        
+        // Adicionar novo segmento
         var rabo = cobra[cobra.length - 1];
-        var sprite = scene.add.image(
-            rabo.x * TAMANHO + 10,
-            rabo.y * TAMANHO + 10,
-            'corpo'
-        );
+        var sprite = scene.add.image(rabo.currentX, rabo.currentY, 'corpo');
         sprite.setOrigin(0, 0);
         sprite.setDepth(20);
-        cobra.push({ x: rabo.x, y: rabo.y, sprite: sprite });
+        cobra.push({
+            x: rabo.x,
+            y: rabo.y,
+            sprite: sprite,
+            currentX: rabo.currentX,
+            currentY: rabo.currentY,
+            targetX: rabo.currentX,
+            targetY: rabo.currentY,
+            scaleX: 1,
+            scaleY: 1,
+            rotation: 0
+        });
+        targetPositions.push({ x: rabo.currentX, y: rabo.currentY });
         
         criarComida();
     }
     
+    // Atualizar posições dos segmentos (seguir líder)
     for (var i = cobra.length - 1; i > 0; i--) {
         cobra[i].x = cobra[i - 1].x;
         cobra[i].y = cobra[i - 1].y;
+        cobra[i].targetX = cobra[i].x * TAMANHO + 10;
+        cobra[i].targetY = cobra[i].y * TAMANHO + 10;
     }
+    
+    // Cabeça vai para nova posição
     cabeca.x = novoX;
     cabeca.y = novoY;
+    cabeca.targetX = novoX * TAMANHO + 10;
+    cabeca.targetY = novoY * TAMANHO + 10;
     
-    var duracao = intervalo * 0.7;
-    for (var i = 0; i < cobra.length; i++) {
-        var sp = cobra[i];
-        scene.tweens.add({
-            targets: sp.sprite,
-            x: sp.x * TAMANHO + 10,
-            y: sp.y * TAMANHO + 10,
-            duration: duracao,
-            ease: 'Linear'
-        });
+    // POLISH: Stretch na direção do movimento
+    if (direcao.x !== 0) {
+        cabeca.scaleX = 1.1;
+        cabeca.scaleY = 0.9;
+    } else {
+        cabeca.scaleX = 0.9;
+        cabeca.scaleY = 1.1;
     }
+    cabeca.sprite.setScale(cabeca.scaleX, cabeca.scaleY);
 }
 
 function criarEfeitoComida(x, y) {
     var efeito = scene.add.graphics();
     efeito.fillStyle(0xffffff, 1);
-    efeito.fillRect(x * TAMANHO + 2, y * TAMANHO + 2, 16, 16);
+    efeito.fillCircle(x * TAMANHO + 10, y * TAMANHO + 10, 8);
     efeito.setDepth(30);
     
     scene.tweens.add({
         targets: efeito,
         alpha: 0,
-        scale: 1.5,
-        duration: 200,
+        scale: 2,
+        duration: 150,
+        ease: 'Quad.easeOut',
         onComplete: function() { efeito.destroy(); }
     });
 }
 
-function criarEfeitoNivel(x, y) {
-    for (var i = 0; i < 8; i++) {
-        var angulo = (i / 8) * Math.PI * 2;
+function criarParticulasComer(x, y) {
+    for (var i = 0; i < POLISH.eatParticleCount; i++) {
         var part = scene.add.graphics();
         part.fillStyle(0xffff00, 1);
-        part.fillRect(x * TAMANHO + 8, y * TAMANHO + 8, 4, 4);
+        part.fillRect(0, 0, 3, 3);
         part.setDepth(35);
+        
+        var angulo = (i / POLISH.eatParticleCount) * Math.PI * 2;
+        var distancia = 20 + Math.random() * 15;
+        var targetX = x * TAMANHO + 10 + Math.cos(angulo) * distancia;
+        var targetY = y * TAMANHO + 10 + Math.sin(angulo) * distancia;
+        
+        part.x = x * TAMANHO + 10;
+        part.y = y * TAMANHO + 10;
         
         scene.tweens.add({
             targets: part,
-            x: x * TAMANHO + 8 + Math.cos(angulo) * 30,
-            y: y * TAMANHO + 8 + Math.sin(angulo) * 30,
+            x: targetX,
+            y: targetY,
             alpha: 0,
-            duration: 400,
+            scale: 0.2,
+            duration: 300,
+            ease: 'Quad.easeOut',
+            onComplete: function() { part.destroy(); }
+        });
+    }
+}
+
+function criarEfeitoNivel(x, y) {
+    // Screen flash
+    var flash = scene.add.rectangle(150, 110, 300, 220, 0xffff00, 0.3);
+    flash.setDepth(100);
+    
+    scene.tweens.add({
+        targets: flash,
+        alpha: 0,
+        duration: 300,
+        onComplete: function() { flash.destroy(); }
+    });
+    
+    // Partículas douradas
+    for (var i = 0; i < 16; i++) {
+        var part = scene.add.graphics();
+        part.fillStyle(0xffff00, 1);
+        part.fillRect(0, 0, 4, 4);
+        part.setDepth(35);
+        
+        var angulo = (i / 16) * Math.PI * 2;
+        var targetX = x * TAMANHO + 10 + Math.cos(angulo) * 50;
+        var targetY = y * TAMANHO + 10 + Math.sin(angulo) * 50;
+        
+        part.x = x * TAMANHO + 10;
+        part.y = y * TAMANHO + 10;
+        
+        scene.tweens.add({
+            targets: part,
+            x: targetX,
+            y: targetY,
+            alpha: 0,
+            duration: 500,
+            ease: 'Quad.easeOut',
             onComplete: function() { part.destroy(); }
         });
     }
@@ -661,7 +786,9 @@ function terminarJogo() {
         localStorage.setItem('snake-recorde', recorde.toString());
     }
     
-    scene.cameras.main.shake(300, 0.02);
+    // POLISH: Screen shake mais impactante
+    scene.cameras.main.shake(400, POLISH.screenShakeIntensity * 2);
+    
     mostrarMenu();
 }
 
@@ -673,7 +800,6 @@ function iniciarJogo() {
     nivel = 1;
     fimDeJogo = false;
     jogando = true;
-    ultimoMovimento = 0;
     somInicio();
     iniciarMusica();
     
@@ -682,8 +808,43 @@ function iniciarJogo() {
     criarComida();
     if (pontuacaoTexto) pontuacaoTexto.setText('PONTOS: 0');
     if (nivelTexto) nivelTexto.setText('NIVEL: 1');
+    ultimoMovimento = 0;
     esconderMenu();
 }
+
+// =====================================
+// GAME LOOP OTIMIZADO
+// =====================================
+
+var lastTime = 0;
+var accumulator = 0;
+var TICK_RATE = 100; // ms entre ticks
+
+function gameLoop(timestamp) {
+    if (!jogando) {
+        requestAnimationFrame(gameLoop);
+        return;
+    }
+    
+    var deltaTime = timestamp - lastTime;
+    lastTime = timestamp;
+    
+    accumulator += deltaTime;
+    
+    // Processar ticks de movimento
+    while (accumulator >= TICK_RATE) {
+        moverCobra();
+        accumulator -= TICK_RATE;
+    }
+    
+    requestAnimationFrame(gameLoop);
+}
+
+// Iniciar game loop
+requestAnimationFrame(function(timestamp) {
+    lastTime = timestamp;
+    requestAnimationFrame(gameLoop);
+});
     </script>
 </body>
 </html>
