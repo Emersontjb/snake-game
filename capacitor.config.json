@@ -1,0 +1,51 @@
+// =====================================================
+// CAPACITOR CONFIG
+// =====================================================
+// Converter para APK com: npm run android
+
+{
+  "appId": "com.snake.game",
+  "appName": "Snake Game",
+  "webDir": "dist",
+  "bundledWebDir": "",
+  "npmClient": "npm",
+  "android": {
+    "allowInsecure": "localhost",
+    "inlineStyleBlocking": [],
+    "manageSettingsPluginEnabled": true,
+    "minSdkVersion": 22,
+    "scheme": "https"
+  },
+  "ios": {
+    "allowInsecure": [],
+    "contentInframe": "",
+    "contentSrc": "index.html",
+    "cordovaNativeStack": [],
+    "inlineStyleBlocking": [],
+    "minifyEnabled": false,
+    "minifySwift": true,
+    "scheme": "SnakeGame",
+    "supportedInterfaceOrientationsForSplash": [
+      "UIInterfaceOrientationPortrait",
+      "UIInterfaceOrientationLandscapeLeft",
+      "UIInterfaceOrientationLandscapeRight"
+    ]
+  },
+  "preferCellular": false,
+  "server": {
+    "android": {
+      "hostname": "localhost",
+      "port": 8080,
+      "runOnServe": true
+    },
+    "cleartext": [
+      "localhost"
+    ],
+    "ios": {
+      "hostname": "localhost",
+      "port": 8080,
+      "runOnServe": true
+    },
+    "openBrowser": true
+  }
+}

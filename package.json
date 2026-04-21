@@ -1,0 +1,13 @@
+{
+  "name": "snake-game",
+  "version": "1.0.0",
+  "description": "Jogo Snake com mecânicas avançadas",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server -c-1 -p 8080",
+    "build": "npx tsc && npx vite build",
+    "android": "npm run build && npx cap sync android && npx cap open android"
+  },
+  "keywords": ["game", "snake", "phaser", "html5"],
+  "license": "MIT"
+}
