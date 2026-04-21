@@ -9,6 +9,10 @@
     <meta name="theme-color" content="#1a1a2e">
     <title>🐍 Snake Game</title>
     <style>
+        /* ===================================== */
+        /* CSS RESET E BASE */
+        /* ===================================== */
+        
         * {
             margin: 0;
             padding: 0;
@@ -25,7 +29,12 @@
             -webkit-touch-callout: none;
             -webkit-user-select: none;
             user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
+        
+        /* ===================================== */
+        /* CONTAINER DO JOGO */
+        /* ===================================== */
         
         #game-container {
             width: 100%;
@@ -33,11 +42,46 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            position: relative;
         }
         
+        /* ===================================== */
+        /* CANVAS */
+        /* ===================================== */
+        
         canvas {
-            display: block;
-            touch-action: none;
+            display: block !important;
+            touch-action: none !important;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+        }
+        
+        /* ===================================== */
+        /* PREVENIR SCROLL */
+        /* ===================================== */
+        
+        body {
+            overscroll-behavior: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+        
+        /* ===================================== */
+        /* ORIENTAÇÃO (mobile advice) */
+        /* ===================================== */
+        
+        @media screen and (orientation: portrait) {
+            /* Portrait mode - tudo ok */
+        }
+        
+        @media screen and (max-width: 320px) {
+            /* Telas muito pequenas */
+            body {
+                font-size: 12px;
+            }
         }
     </style>
 </head>
