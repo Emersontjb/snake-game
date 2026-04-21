@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#1a1a2e">
-    <title>🐍 Snake Game</title>
+    <title>🐍 Cobrinha</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
@@ -19,123 +19,179 @@
         }
         #game-container {
             width: 100%; height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            position: relative;
         }
         canvas { display: block !important; }
+        
+        /* Controles touch */
+        #controles {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            z-index: 200;
+            opacity: 0.7;
+        }
+        .linha {
+            display: flex;
+            gap: 5px;
+        }
+        .botao {
+            width: 50px;
+            height: 50px;
+            background: #333;
+            border: 2px solid #555;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        .botao:active {
+            background: #555;
+        }
     </style>
 </head>
 <body>
     <div id="game-container"></div>
+    
+    <!-- Controles mobile -->
+    <div id="controles">
+        <div class="linha">
+            <div class="botao" ontouchstart="moverCima()">▲</div>
+        </div>
+        <div class="linha">
+            <div class="botao" ontouchstart="moverEsquerda()">◄</div>
+            <div class="botao" ontouchstart="iniciarJogo()">►</div>
+            <div class="botao" ontouchstart="moverDireita()">►</div>
+        </div>
+        <div class="linha">
+            <div class="botao" ontouchstart="moverBaixo()">▼</div>
+        </div>
+    </div>
+    
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
     <script>
-const TILE_SIZE = 20;
-const GRID_WIDTH = 15;
-const GRID_HEIGHT = 11;
+// =====================================
+// JOGO DA COBRINHA
+// =====================================
 
-const TILES = { EMPTY: 0, GROUND: 1, WALL: 2 };
+const TAMANHO = 20;
+const COLUNAS = 15;
+const LINHAS = 11;
+const TILE = { VAZIO: 0, CHAO: 1, PAREDE: 2 };
 
-let game, scene;
-let snake = [];
-let direction = { x: 1, y: 0 };
-let nextDirection = { x: 1, y: 0 };
-let foodPos = { x: 7, y: 5 };
-let score = 0;
-let highScore = 0;
-let gameOver = false;
-let isRunning = false;
-let lastMove = 0;
+let scene;
+let cobra = [];
+let direcao = { x: 1, y: 0 };
+let proximaDirecao = { x: 1, y: 0 };
+let comidaPos = { x: 7, y: 5 };
+let pontuacao = 0;
+let recorde = 0;
+let fimDeJogo = false;
+let jogando = false;
+let ultimoMovimento = 0;
 let grid = [];
-let foodSprite = null;
+let comidaSprite = null;
 let menuContainer = null;
-let scoreText = null;
+let pontuacaoTexto = null;
+let intervalo = 150;
 
-function init() {
-    game = new Phaser.Game({
-        type: Phaser.AUTO,
-        parent: 'game-container',
-        width: 300,
-        height: 220,
-        backgroundColor: '#1a1a2e',
-        scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-        scene: { create: createScene, update: updateScene }
-    });
-}
+// =====================================
+// INICIALIZAÇÃO
+// =====================================
 
-function createScene() {
+new Phaser.Game({
+    type: Phaser.AUTO,
+    parent: 'game-container',
+    width: 300,
+    height: 220,
+    backgroundColor: '#1a1a2e',
+    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+    scene: { create: criar, update: atualizar }
+});
+
+function criar() {
     scene = this;
-    highScore = parseInt(localStorage.getItem('snake-hs') || '0');
+    recorde = parseInt(localStorage.getItem('snake-recorde') || '0');
     
-    createTextures();
-    initGrid();
-    renderGrid();
-    createSnake();
-    spawnFood();
-    createUI();
-    showMenu();
+    criarTexturas();
+    criarGrid();
+    desenharGrid();
+    criarCobra();
+    criarComida();
+    criarInterface();
+    mostrarMenu();
     
-    // Keyboard input
-    scene.input.keyboard.on('keydown', handleKey);
-    
-    // Touch/click
-    scene.input.on('pointerdown', startGame);
+    scene.input.keyboard.on('keydown', tratarTecla);
+    scene.input.on('pointerdown', iniciarJogo);
 }
 
-function handleKey(e) {
-    if (!isRunning) {
-        if (e.key === 'Enter' || e.code === 'Space') startGame();
+// =====================================
+// CONTROLES
+// =====================================
+
+function tratarTecla(e) {
+    if (!jogando) {
+        if (e.key === 'Enter' || e.code === 'Space') iniciarJogo();
         return;
     }
     
-    switch(e.key) {
-        case 'ArrowLeft':
-        case 'a':
-        case 'A':
-            if (direction.x !== 1) nextDirection = { x: -1, y: 0 };
-            break;
-        case 'ArrowRight':
-        case 'd':
-        case 'D':
-            if (direction.x !== -1) nextDirection = { x: 1, y: 0 };
-            break;
-        case 'ArrowUp':
-        case 'w':
-        case 'W':
-            if (direction.y !== 1) nextDirection = { x: 0, y: -1 };
-            break;
-        case 'ArrowDown':
-        case 's':
-        case 'S':
-            if (direction.y !== -1) nextDirection = { x: 0, y: 1 };
-            break;
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+        if (direcao.x !== 1) proximaDirecao = { x: -1, y: 0 };
+    }
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+        if (direcao.x !== -1) proximaDirecao = { x: 1, y: 0 };
+    }
+    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+        if (direcao.y !== 1) proximaDirecao = { x: 0, y: -1 };
+    }
+    if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+        if (direcao.y !== -1) proximaDirecao = { x: 0, y: 1 };
     }
 }
 
-function createTextures() {
-    // Floor
+// Controles mobile
+function moverCima() { if (jogando && direcao.y !== 1) proximaDirecao = { x: 0, y: -1 }; }
+function moverBaixo() { if (jogando && direcao.y !== -1) proximaDirecao = { x: 0, y: 1 }; }
+function moverEsquerda() { if (jogando && direcao.x !== 1) proximaDirecao = { x: -1, y: 0 }; }
+function moverDireita() { if (jogando && direcao.x !== -1) proximaDirecao = { x: 1, y: 0 }; }
+
+// =====================================
+// TEXTURAS
+// =====================================
+
+function criarTexturas() {
     var g = scene.add.graphics();
+    
+    // Chão
+    g.clear();
     g.fillStyle(0x252540, 1);
     g.fillRect(0, 0, 20, 20);
     g.fillStyle(0x2a2a45, 0.3);
     g.fillCircle(5, 5, 2);
     g.fillCircle(15, 15, 2);
-    g.generateTexture('floor', 20, 20);
-    g.destroy();
+    g.generateTexture('chao', 20, 20);
     
-    // Wall
-    g = scene.add.graphics();
+    // Parede
+    g.clear();
     g.fillStyle(0x2d2d4a, 1);
     g.fillRect(1, 1, 18, 18);
     g.fillStyle(0x1d1d2a, 0.5);
     g.fillRect(1, 14, 18, 5);
     g.lineStyle(1, 0x000000, 0.3);
     g.strokeRect(1, 1, 18, 18);
-    g.generateTexture('wall', 20, 20);
-    g.destroy();
+    g.generateTexture('parede', 20, 20);
     
-    // Snake head
-    g = scene.add.graphics();
+    // Cabeça
+    g.clear();
     g.fillStyle(0x3d6a4d, 1);
     g.fillCircle(10, 10, 9);
     g.fillStyle(0x4d7a5d, 0.4);
@@ -146,248 +202,293 @@ function createTextures() {
     g.fillStyle(0x111111, 1);
     g.fillCircle(7, 9, 2);
     g.fillCircle(13, 9, 2);
-    g.generateTexture('snake_head', 20, 20);
-    g.destroy();
+    g.generateTexture('cabeca', 20, 20);
     
-    // Snake body
-    g = scene.add.graphics();
+    // Corpo
+    g.clear();
     g.fillStyle(0x2d5a3d, 1);
     g.fillCircle(10, 10, 8);
     g.fillStyle(0x4d7a5d, 0.25);
     g.fillCircle(7, 7, 2);
-    g.generateTexture('snake_body', 20, 20);
-    g.destroy();
+    g.generateTexture('corpo', 20, 20);
     
-    // Food
-    g = scene.add.graphics();
+    // Comida normal
+    g.clear();
     g.fillStyle(0xff3344, 1);
     g.fillCircle(10, 10, 7);
     g.fillStyle(0xff5566, 0.6);
     g.fillCircle(8, 8, 4);
     g.fillStyle(0xffffff, 0.5);
     g.fillCircle(7, 6, 2);
-    g.lineStyle(1, 0x000000, 0.3);
-    g.strokeCircle(10, 10, 7);
-    g.generateTexture('food', 20, 20);
+    g.generateTexture('comida', 20, 20);
+    
+    // Comida especial (azul)
+    g.clear();
+    g.fillStyle(0x5599ff, 1);
+    g.fillCircle(10, 10, 7);
+    g.fillStyle(0x77aaff, 0.6);
+    g.fillCircle(8, 8, 4);
+    g.fillStyle(0xaaccff, 0.5);
+    g.fillCircle(7, 6, 2);
+    g.generateTexture('comida_especial', 20, 20);
+    
+    // Comida rápida (amarelo)
+    g.clear();
+    g.fillStyle(0xffdd44, 1);
+    g.fillCircle(10, 10, 7);
+    g.fillStyle(0xffee66, 0.6);
+    g.fillCircle(8, 8, 4);
+    g.generateTexture('comida_rapida', 20, 20);
+    
     g.destroy();
 }
 
-function initGrid() {
+// =====================================
+// MAPA
+// =====================================
+
+function criarGrid() {
     grid = [];
-    for (var y = 0; y < GRID_HEIGHT; y++) {
+    for (var y = 0; y < LINHAS; y++) {
         grid[y] = [];
-        for (var x = 0; x < GRID_WIDTH; x++) {
-            if (x === 0 || x === GRID_WIDTH - 1 || y === 0 || y === GRID_HEIGHT - 1) {
-                grid[y][x] = TILES.WALL;
+        for (var x = 0; x < COLUNAS; x++) {
+            if (x === 0 || x === COLUNAS - 1 || y === 0 || y === LINHAS - 1) {
+                grid[y][x] = TILE.PAREDE;
             } else if (x % 2 === 0 && y % 2 === 0) {
-                grid[y][x] = TILES.WALL;
+                grid[y][x] = TILE.PAREDE;
             } else {
-                grid[y][x] = TILES.GROUND;
+                grid[y][x] = TILE.CHAO;
             }
         }
     }
-    // Safe zone
-    grid[1][1] = grid[1][2] = grid[2][1] = TILES.GROUND;
+    grid[1][1] = grid[1][2] = grid[2][1] = TILE.CHAO;
 }
 
-function renderGrid() {
-    for (var y = 0; y < GRID_HEIGHT; y++) {
-        for (var x = 0; x < GRID_WIDTH; x++) {
-            var px = x * TILE_SIZE + 10;
-            var py = y * TILE_SIZE + 10;
-            var tex = grid[y][x] === TILES.WALL ? 'wall' : 'floor';
-            var tile = scene.add.image(px, py, tex);
+function desenharGrid() {
+    for (var y = 0; y < LINHAS; y++) {
+        for (var x = 0; x < COLUNAS; x++) {
+            var tex = grid[y][x] === TILE.PAREDE ? 'parede' : 'chao';
+            var tile = scene.add.image(x * TAMANHO + 10, y * TAMANHO + 10, tex);
             tile.setOrigin(0, 0);
             tile.setDepth(1);
         }
     }
 }
 
-function createSnake() {
-    snake = [];
+// =====================================
+// COBRA
+// =====================================
+
+function criarCobra() {
+    cobra = [];
     for (var i = 2; i >= 0; i--) {
-        var gx = 5 - i;
-        var gy = 5;
-        var px = gx * TILE_SIZE + 10;
-        var py = gy * TILE_SIZE + 10;
-        var tex = i === 0 ? 'snake_head' : 'snake_body';
+        var px = (5 - i) * TAMANHO + 10;
+        var py = 5 * TAMANHO + 10;
+        var tex = i === 0 ? 'cabeca' : 'corpo';
         var sprite = scene.add.image(px, py, tex);
         sprite.setOrigin(0, 0);
         sprite.setDepth(20);
-        snake.push({ gridX: gx, gridY: gy, sprite: sprite });
+        cobra.push({ x: 5 - i, y: 5, sprite: sprite });
     }
-    direction = { x: 1, y: 0 };
-    nextDirection = { x: 1, y: 0 };
+    direcao = { x: 1, y: 0 };
+    proximaDirecao = { x: 1, y: 0 };
 }
 
-function spawnFood() {
-    var valid = false;
-    while (!valid) {
-        foodPos.x = Math.floor(Math.random() * (GRID_WIDTH - 2)) + 1;
-        foodPos.y = Math.floor(Math.random() * (GRID_HEIGHT - 2)) + 1;
+function criarComida() {
+    var valido = false;
+    while (!valido) {
+        comidaPos.x = Math.floor(Math.random() * (COLUNAS - 2)) + 1;
+        comidaPos.y = Math.floor(Math.random() * (LINHAS - 2)) + 1;
         
-        valid = grid[foodPos.y][foodPos.x] === TILES.GROUND;
-        for (var i = 0; i < snake.length; i++) {
-            if (snake[i].gridX === foodPos.x && snake[i].gridY === foodPos.y) {
-                valid = false;
+        valido = grid[comidaPos.y][comidaPos.x] === TILE.CHAO;
+        for (var i = 0; i < cobra.length; i++) {
+            if (cobra[i].x === comidaPos.x && cobra[i].y === comidaPos.y) {
+                valido = false;
                 break;
             }
         }
     }
     
-    if (foodSprite) foodSprite.destroy();
-    var px = foodPos.x * TILE_SIZE + 10;
-    var py = foodPos.y * TILE_SIZE + 10;
-    foodSprite = scene.add.image(px, py, 'food');
-    foodSprite.setOrigin(0, 0);
-    foodSprite.setDepth(15);
+    if (comidaSprite) comidaSprite.destroy();
+    
+    // Escolher tipo de comida (10% especial)
+    var tipo = Math.random() < 0.1 ? (Math.random() < 0.5 ? 'comida_especial' : 'comida_rapida') : 'comida';
+    
+    comidaSprite = scene.add.image(
+        comidaPos.x * TAMANHO + 10,
+        comidaPos.y * TAMANHO + 10,
+        tipo
+    );
+    comidaSprite.setOrigin(0, 0);
+    comidaSprite.setDepth(15);
 }
 
-function createUI() {
-    scoreText = scene.add.text(10, 5, 'Score: 0', {
+// =====================================
+// INTERFACE
+// =====================================
+
+function criarInterface() {
+    pontuacaoTexto = scene.add.text(10, 5, 'Pontos: 0', {
         fontSize: '12px', color: '#ffffff', fontFamily: 'system-ui'
     });
-    scoreText.setDepth(50);
+    pontuacaoTexto.setDepth(50);
     
     menuContainer = scene.add.container(150, 110);
     menuContainer.setDepth(100);
-    menuContainer.setVisible(true);
     
-    var bg = scene.add.rectangle(0, 0, 180, 100, 0x000000, 0.85);
-    bg.setOrigin(0.5);
-    menuContainer.add(bg);
+    var fundo = scene.add.rectangle(0, 0, 180, 100, 0x000000, 0.85);
+    fundo.setOrigin(0.5);
+    menuContainer.add(fundo);
     
-    var title = scene.add.text(0, -30, 'SNAKE', {
-        fontSize: '22px', color: '#44ff88', fontFamily: 'system-ui', fontStyle: 'bold'
+    var titulo = scene.add.text(0, -30, '🐍 COBRINHA', {
+        fontSize: '20px', color: '#44ff88', fontFamily: 'system-ui', fontStyle: 'bold'
     });
-    title.setOrigin(0.5);
-    menuContainer.add(title);
+    titulo.setOrigin(0.5);
+    menuContainer.add(titulo);
     
-    var sub = scene.add.text(0, 0, 'Tap or Enter to Start', {
+    var instrucao = scene.add.text(0, 0, 'Toque ou Enter', {
         fontSize: '12px', color: '#aaaaaa', fontFamily: 'system-ui'
     });
-    sub.setOrigin(0.5);
-    menuContainer.add(sub);
+    instrucao.setOrigin(0.5);
+    menuContainer.add(instrucao);
     
-    var high = scene.add.text(0, 25, 'High: ' + highScore, {
+    var alto = scene.add.text(0, 25, 'Recorde: ' + recorde, {
         fontSize: '11px', color: '#888888', fontFamily: 'system-ui'
     });
-    high.setOrigin(0.5);
-    menuContainer.add(high);
-}
-
-function showMenu() {
-    if (menuContainer) menuContainer.setVisible(true);
-}
-
-function hideMenu() {
-    if (menuContainer) menuContainer.setVisible(false);
-}
-
-function updateScene(time, delta) {
-    if (gameOver || !isRunning) return;
+    alto.setOrigin(0.5);
+    menuContainer.add(alto);
     
-    var moveInterval = Math.max(80, 150 - snake.length * 2);
-    if (time > lastMove + moveInterval) {
-        lastMove = time;
-        moveSnake();
+    menuContainer.setVisible(true);
+}
+
+function mostrarMenu() { if (menuContainer) menuContainer.setVisible(true); }
+function esconderMenu() { if (menuContainer) menuContainer.setVisible(false); }
+
+// =====================================
+// JOGO
+// =====================================
+
+function atualizar(tempo) {
+    if (fimDeJogo || !jogando) return;
+    
+    intervalo = Math.max(80, 150 - cobra.length * 2);
+    if (tempo > ultimoMovimento + intervalo) {
+        ultimoMovimento = tempo;
+        moverCobra();
+    }
+    
+    // Animar comida
+    if (comidaSprite) {
+        comidaSprite.setScale(1 + Math.sin(tempo / 200) * 0.1);
     }
 }
 
-function moveSnake() {
-    direction = { x: nextDirection.x, y: nextDirection.y };
+function moverCobra() {
+    direcao = { x: proximaDirecao.x, y: proximaDirecao.y };
     
-    var head = snake[0];
-    var newX = head.gridX + direction.x;
-    var newY = head.gridY + direction.y;
+    var cabeca = cobra[0];
+    var novoX = cabeca.x + direcao.x;
+    var novoY = cabeca.y + direcao.y;
     
-    // Wall collision
-    if (newX < 0 || newX >= GRID_WIDTH || newY < 0 || newY >= GRID_HEIGHT) {
-        endGame();
+    if (novoX < 0 || novoX >= COLUNAS || novoY < 0 || novoY >= LINHAS) {
+        terminarJogo();
         return;
     }
-    if (grid[newY][newX] === TILES.WALL) {
-        endGame();
+    if (grid[novoY][novoX] === TILE.PAREDE) {
+        terminarJogo();
         return;
     }
     
-    // Self collision
-    for (var i = 1; i < snake.length; i++) {
-        if (snake[i].gridX === newX && snake[i].gridY === newY) {
-            endGame();
+    for (var i = 1; i < cobra.length; i++) {
+        if (cobra[i].x === novoX && cobra[i].y === novoY) {
+            terminarJogo();
             return;
         }
     }
     
-    var ate = (newX === foodPos.x && newY === foodPos.y);
+    var comeu = (novoX === comidaPos.x && novoY === comidaPos.y);
     
-    if (ate) {
-        score += 10;
-        if (scoreText) scoreText.setText('Score: ' + score);
+    if (comeu) {
+        pontuacao += 10;
+        if (pontuacaoTexto) pontuacaoTexto.setText('Pontos: ' + pontuacao);
         
-        var tail = snake[snake.length - 1];
-        var px = tail.gridX * TILE_SIZE + 10;
-        var py = tail.gridY * TILE_SIZE + 10;
-        var sprite = scene.add.image(px, py, 'snake_body');
+        criarEfeitoComida(comidaPos.x, comidaPos.y);
+        
+        var rabo = cobra[cobra.length - 1];
+        var sprite = scene.add.image(
+            rabo.x * TAMANHO + 10,
+            rabo.y * TAMANHO + 10,
+            'corpo'
+        );
         sprite.setOrigin(0, 0);
         sprite.setDepth(20);
-        snake.push({ gridX: tail.gridX, gridY: tail.gridY, sprite: sprite });
+        cobra.push({ x: rabo.x, y: rabo.y, sprite: sprite });
         
-        spawnFood();
+        criarComida();
     }
     
-    // Move body
-    for (var i = snake.length - 1; i > 0; i--) {
-        snake[i].gridX = snake[i - 1].gridX;
-        snake[i].gridY = snake[i - 1].gridY;
+    for (var i = cobra.length - 1; i > 0; i--) {
+        cobra[i].x = cobra[i - 1].x;
+        cobra[i].y = cobra[i - 1].y;
     }
-    head.gridX = newX;
-    head.gridY = newY;
+    cabeca.x = novoX;
+    cabeca.y = novoY;
     
-    // Animate
-    var duration = moveInterval * 0.7;
-    for (var i = 0; i < snake.length; i++) {
-        var sp = snake[i];
-        var tp = { x: sp.gridX * TILE_SIZE + 10, y: sp.gridY * TILE_SIZE + 10 };
+    var duracao = intervalo * 0.7;
+    for (var i = 0; i < cobra.length; i++) {
+        var sp = cobra[i];
         scene.tweens.add({
             targets: sp.sprite,
-            x: tp.x,
-            y: tp.y,
-            duration: duration,
+            x: sp.x * TAMANHO + 10,
+            y: sp.y * TAMANHO + 10,
+            duration: duracao,
             ease: 'Linear'
         });
     }
 }
 
-function endGame() {
-    gameOver = true;
-    isRunning = false;
+function criarEfeitoComida(x, y) {
+    var efeito = scene.add.graphics();
+    efeito.fillStyle(0xffffff, 0.8);
+    efeito.fillCircle(x * TAMANHO + 10, y * TAMANHO + 10, 10);
+    efeito.setDepth(30);
     
-    if (score > highScore) {
-        highScore = score;
-        localStorage.setItem('snake-hs', highScore.toString());
+    scene.tweens.add({
+        targets: efeito,
+        alpha: 0,
+        scale: 2,
+        duration: 300,
+        onComplete: function() { efeito.destroy(); }
+    });
+}
+
+function terminarJogo() {
+    fimDeJogo = true;
+    jogando = false;
+    
+    if (pontuacao > recorde) {
+        recorde = pontuacao;
+        localStorage.setItem('snake-recorde', recorde.toString());
     }
     
     scene.cameras.main.shake(200, 0.01);
-    showMenu();
+    mostrarMenu();
 }
 
-function startGame() {
-    if (isRunning) return;
+function iniciarJogo() {
+    if (jogando) return;
     
-    score = 0;
-    gameOver = false;
-    isRunning = true;
-    lastMove = 0;
+    pontuacao = 0;
+    fimDeJogo = false;
+    jogando = true;
+    ultimoMovimento = 0;
     
-    snake.forEach(function(s) { s.sprite.destroy(); });
-    createSnake();
-    spawnFood();
-    if (scoreText) scoreText.setText('Score: 0');
-    hideMenu();
+    cobra.forEach(function(s) { s.sprite.destroy(); });
+    criarCobra();
+    criarComida();
+    if (pontuacaoTexto) pontuacaoTexto.setText('Pontos: 0');
+    esconderMenu();
 }
-
-init();
     </script>
 </body>
 </html>
