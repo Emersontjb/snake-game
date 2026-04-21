@@ -1,14 +1,10 @@
 /**
  * =====================================
- * GAME SCENE - VERSÃO OTIMIZADA
+ * GAME SCENE - BOMBERMAN STYLE
  * =====================================
  * 
- * Cena com todas as otimizações:
- * - Object pooling
- * - Dirty rendering
- * - Delta cap
- * - Frame skip
- * - Batch rendering
+ * Jogo com estética semi-realista
+ * estilo Bomberman.
  */
 
 import GameConfig from './GameConfig.js';
@@ -20,6 +16,25 @@ import Controls from './Controls.js';
 import AudioManager from './AudioManager.js';
 import StorageManager from './StorageManager.js';
 import PerformanceManager from './PerformanceManager.js';
+import VisualStyleManager from './VisualStyleManager.js';
+
+// =====================================
+// CONSTANTES DO BOMBERMAN
+// =====================================
+
+const TILE_SIZE = 20;
+const GRID_WIDTH = 15;
+const GRID_HEIGHT = 11;
+
+const TILES = {
+    EMPTY: 0,
+    WALL_SOLID: 1,
+    WALL_BLOCK: 2,
+    BOMB: 3,
+    FIRE: 4,
+    PLAYER: 5,
+    ENEMY: 6
+};
 
 export default class GameScene extends Phaser.Scene {
     constructor() {
@@ -28,39 +43,31 @@ export default class GameScene extends Phaser.Scene {
         // =====================================
         // COMPONENTES
         // =====================================
-        this.snake = null;
-        this.food = null;
-        this.obstacles = null;
-        this.uiManager = null;
-        this.controls = null;
-        this.audioManager = null;
-        this.storageManager = null;
-        this.performance = null;
         
-        // =====================================
-        // ESTADO DO JOGO
-        // =====================================
+        this.grid = [];
+        this.walls = [];
+        this.blocks = [];
+        this.bombs = [];
+        this.explosions = [];
+        
+        this.player = null;
+        
+        this.visualManager = null;
+        
         this.score = 0;
         this.highScore = 0;
+        this.lives = 3;
         this.level = 1;
         this.gameOver = false;
         this.isRunning = false;
         
         this.lastMove = 0;
-        
-        // =====================================
-        // OTIMIZAÇÃO: CACHE
-        // =====================================
-        this.cachedDirection = null;
-        this.lastMoveInterval = GameConfig.BASE_MOVE_INTERVAL;
     }
     
     create() {
-        console.log('🎮 Criando cena (otimizada)...');
+        console.log('🎨 Criando estilo Bomberman...');
         
-        // =====================================
-        // INICIALIZAR GERENCIADORES
-        // =====================================
+        // Inicializar gerenciadores
         this.storageManager = new StorageManager();
         this.highScore = this.storageManager.getHighScore();
         
@@ -70,261 +77,423 @@ export default class GameScene extends Phaser.Scene {
         this.performance = new PerformanceManager(this);
         
         // =====================================
-        // CRIAR ELEMENTOS DO JOGO
+        // VISUAL STYLE
         // =====================================
-        this.createBackground();
-        this.createBorders();
         
-        this.snake = new Snake(this, GameConfig.INITIAL_X, GameConfig.INITIAL_Y);
-        this.food = new Food(this);
+        this.visualManager = new VisualStyleManager(this);
         
-        // Array otimizado para obstáculos
-        this.obstacles = [];
+        // =====================================
+        // CRIAR MAPA
+        // =====================================
+        
+        this.createMap();
+        
+        // =====================================
+        // CRIAR JOGADOR
+        // =====================================
+        
+        this.createPlayer();
         
         // =====================================
         // MOSTRAR MENU
         // =====================================
+        
         this.uiManager.showMenu(this.highScore);
         
-        console.log('🎮 Jogo pronto!');
-        console.log('📱 Quality:', this.performance.getQuality());
-    }
-    
-    createBackground() {
-        // =====================================
-        // OTIMIZAÇÃO:一次性 renderizar fundo
-        // =====================================
-        const bg = this.add.graphics();
-        
-        // Gradiente simples (não usa gradients do canvas para mobile)
-        bg.fillStyle(GameConfig.COLORS.BG_TOP, 1);
-        bg.fillRect(0, 0, GameConfig.GAME_WIDTH, GameConfig.GAME_HEIGHT);
-        
-        // Grid
-        const grid = this.add.graphics();
-        grid.lineStyle(1, GameConfig.COLORS.GRID, 0.15);
-        
-        for (let x = 0; x <= GameConfig.GAME_WIDTH; x += GameConfig.GRID_SIZE) {
-            grid.moveTo(x, 0);
-            grid.lineTo(x, GameConfig.GAME_HEIGHT);
-        }
-        
-        for (let y = 0; y <= GameConfig.GAME_HEIGHT; y += GameConfig.GRID_SIZE) {
-            grid.moveTo(0, y);
-            grid.lineTo(GameConfig.GAME_WIDTH, y);
-        }
-        
-        grid.strokePath();
-    }
-    
-    createBorders() {
-        const border = this.add.graphics();
-        border.lineStyle(3, GameConfig.COLORS.UI_PRIMARY, 1);
-        border.strokeRect(
-            1,
-            1,
-            GameConfig.GAME_WIDTH - 2,
-            GameConfig.GAME_HEIGHT - 2
-        );
+        console.log('🎨 Estilo aplicado!');
     }
     
     // =====================================
-    // UPDATE OTIMIZADO
+    // MAPA DO JOGO
     // =====================================
     
-    update(time, delta) {
-        // Não fazer nada se game over
-        if (this.gameOver) return;
+    createMap() {
+        const gridWidth = GRID_WIDTH;
+        const gridHeight = GRID_HEIGHT;
         
-        // =====================================
-        // OTIMIZAÇÃO: Cap de delta
-        // =====================================
-        delta = this.performance.capDelta(delta);
-        
-        // =====================================
-        // OTIMIZAÇÃO: Frame skip
-        // =====================================
-        if (this.performance.shouldSkipFrame()) {
-            return;
+        // Inicializar grid
+        for (let y = 0; y < gridHeight; y++) {
+            this.grid[y] = [];
+            for (let x = 0; x < gridWidth; x++) {
+                this.grid[y][x] = TILES.EMPTY;
+            }
         }
         
-        // =====================================
-        // ATUALIZAR PERFORMANCE
-        // =====================================
-        this.performance.update(time, delta);
-        
-        // =====================================
-        // OTIMIZAÇÃO: Cache da direção
-        // =====================================
-        const direction = this.controls.getDirection();
-        if (direction) {
-            this.cachedDirection = direction;
+        // Criar paredes da fronteira
+        for (let x = 0; x < gridWidth; x++) {
+            this.addWall(x, 0);
+            this.addWall(x, gridHeight - 1);
         }
         
-        // =====================================
-        // MOVER COBRA
-        // =====================================
-        if (direction) {
-            this.snake.setDirection(direction);
+        for (let y = 1; y < gridHeight - 1; y++) {
+            this.addWall(0, y);
+            this.addWall(gridWidth - 1, y);
         }
         
-        // Calcular intervalo baseado no nível
-        this.lastMoveInterval = Math.max(
-            GameConfig.MIN_MOVE_INTERVAL,
-            GameConfig.BASE_MOVE_INTERVAL - (this.level - 1) * GameConfig.SPEED_INCREMENT
-        );
-        
-        if (time > this.lastMove + this.lastMoveInterval) {
-            this.lastMove = time;
-            this.updateGame();
-        }
-        
-        // =====================================
-        // OTIMIZAÇÃO: Não atualizar comida se invisível
-        // =====================================
-        if (this.food && this.food.visible) {
-            this.food.update(time);
-        }
-    }
-    
-    updateGame() {
-        if (!this.isRunning || this.gameOver) return;
-        
-        // Mover cobra
-        const result = this.snake.move();
-        
-        if (result.collision) {
-            this.endGame();
-            return;
-        }
-        
-        if (result.ateFood) {
-            this.collectFood();
-        }
-        
-        // Verificar obstáculos
-        if (this.checkObstacleCollision()) {
-            this.endGame();
-        }
-    }
-    
-    collectFood() {
-        // =====================================
-        // OTIMIZAÇÃO: Pontuação local
-        // =====================================
-        const points = GameConfig.POINTS_PER_FOOD * this.level;
-        this.score += points;
-        
-        this.audioManager.play('eat');
-        
-        const newLevel = Math.floor(this.score / GameConfig.SCORE_PER_LEVEL) + 1;
-        
-        if (newLevel > this.level) {
-            this.levelUp(newLevel);
-        }
-        
-        this.uiManager.updateScore(this.score);
-        this.spawnFood();
-    }
-    
-    levelUp(newLevel) {
-        this.level = newLevel;
-        
-        this.audioManager.play('levelup');
-        
-        // Spawnar obstáculo
-        if (this.level >= GameConfig.MAX_OBSTACLE_LEVEL) {
-            this.spawnObstacle();
-        }
-        
-        this.uiManager.showLevelUp(this.level);
-    }
-    
-    // =====================================
-    // OTIMIZAÇÃO: Spawn otimizado
-    // =====================================
-    
-    spawnFood() {
-        const maxAttempts = 50;
-        let attempts = 0;
-        let x, y;
-        let valid = false;
-        
-        // Otimização: early return
-        while (!valid && attempts < maxAttempts) {
-            attempts++;
-            
-            x = Math.round(
-                Phaser.Math.Between(GameConfig.MARGIN, GameConfig.GAME_WIDTH - GameConfig.MARGIN - GameConfig.GRID_SIZE) / 
-                GameConfig.GRID_SIZE
-            ) * GameConfig.GRID_SIZE;
-            
-            y = Math.round(
-                Phaser.Math.Between(GameConfig.MARGIN, GameConfig.GAME_HEIGHT - GameConfig.MARGIN - GameConfig.GRID_SIZE) / 
-                GameConfig.GRID_SIZE
-            ) * GameConfig.GRID_SIZE;
-            
-            valid = !this.snake.collidesWithBody(x, y) && !this.snake.collidesWithHead(x, y);
-            
-            for (const obs of this.obstacles) {
-                if (obs.x === x && obs.y === y) {
-                    valid = false;
-                    break;
+        // Criar grade interna (estilo Bomberman)
+        for (let x = 1; x < gridWidth - 1; x++) {
+            for (let y = 1; y < gridHeight - 1; y++) {
+                if (x % 2 === 0 && y % 2 === 0) {
+                    this.addWall(x, y);
+                } else if (Math.random() < 0.4) {
+                    // 40% de chance de bloco destrutível
+                    if (x > 1 || y > 1) {
+                        this.addBlock(x, y);
+                    }
                 }
             }
         }
         
-        if (valid) {
-            this.food.spawn(x, y);
-        }
+        // Área segura para jogador (canto superior esquerdo)
+        this.clearArea(1, 1);
+        this.clearArea(2, 1);
+        this.clearArea(1, 2);
     }
     
-    spawnObstacle() {
-        if (this.obstacles.length >= GameConfig.MAX_OBSTACLES) return;
+    addWall(gridX, gridY) {
+        const x = gridX * TILE_SIZE;
+        const y = gridY * TILE_SIZE;
         
-        let valid = false;
-        let x, y;
-        let attempts = 0;
+        const wall = this.add.graphics();
         
-        while (!valid && attempts < 30) {
-            attempts++;
+        // Usar textura criada
+        if (this.visualManager && this.scene.textures.exists('wall')) {
+            wall.setTexture('wall');
+            wall.setPosition(x, y);
+        } else {
+            // Fallback: desenhar manualmente
+            wall.fillStyle(0x5a5a5a, 1);
+            wall.fillRect(x, y, TILE_SIZE, TILE_SIZE);
             
-            x = Math.round(
-                Phaser.Math.Between(GameConfig.MARGIN, GameConfig.GAME_WIDTH - GameConfig.MARGIN - GameConfig.GRID_SIZE) / 
-                GameConfig.GRID_SIZE
-            ) * GameConfig.GRID_SIZE;
-            
-            y = Math.round(
-                Phaser.Math.Between(GameConfig.MARGIN, GameConfig.GAME_HEIGHT - GameConfig.MARGIN - GameConfig.GRID_SIZE) / 
-                GameConfig.GRID_SIZE
-            ) * GameConfig.GRID_SIZE;
-            
-            const head = this.snake.getHead();
-            const dist = Math.abs(x - head.x) + Math.abs(y - head.y);
-            
-            valid = dist >= GameConfig.GRID_SIZE * 3 &&
-                    !this.snake.collidesWithBody(x, y) &&
-                    !this.snake.collidesWithHead(x, y) &&
-                    !(this.food.x === x && this.food.y === y);
+            // Borda 3D
+            wall.lineStyle(1, 0x6a6a6a, 0.8);
+            wall.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
         }
         
-        if (valid) {
-            const obstacle = Obstacle.create(this, x, y);
-            this.obstacles.push(obstacle);
-        }
+        this.walls.push({ x: gridX, y: gridY, sprite: wall });
+        this.grid[gridY][gridX] = TILES.WALL_SOLID;
     }
     
-    checkObstacleCollision() {
-        const head = this.snake.getHead();
+    addBlock(gridX, gridY) {
+        const x = gridX * TILE_SIZE;
+        const y = gridY * TILE_SIZE;
         
-        for (const obs of this.obstacles) {
-            if (head.x === obs.x && head.y === obs.y) {
-                return true;
+        const block = this.add.graphics();
+        
+        if (this.visualManager && this.scene.textures.exists('block')) {
+            block.setTexture('block');
+            block.setPosition(x, y);
+        } else {
+            // Estilo Tijolo
+            block.fillStyle(0x7a6a5a, 1);
+            block.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+            
+            // Linhas de tijolo
+            block.lineStyle(1, 0x6a5a4a, 0.5);
+            block.moveTo(x, y + TILE_SIZE * 0.33);
+            block.lineTo(x + TILE_SIZE, y + TILE_SIZE * 0.33);
+            block.moveTo(x, y + TILE_SIZE * 0.66);
+            block.lineTo(x + TILE_SIZE, y + TILE_SIZE * 0.66);
+            block.strokePath();
+            
+            // Borda 3D
+            block.lineStyle(1, 0x6a6a6a, 0.5);
+            block.moveTo(x + 1, y + 1);
+            block.lineTo(x + TILE_SIZE - 1, y + 1);
+            block.lineStyle(1, 0x4a4a4a, 0.8);
+            block.lineTo(x + TILE_SIZE - 1, y + TILE_SIZE - 1);
+            block.lineTo(x + 1, y + TILE_SIZE - 1);
+            block.strokePath();
+        }
+        
+        this.blocks.push({ x: gridX, y: gridY, sprite: block, health: 1 });
+        this.grid[gridY][gridX] = TILES.WALL_BLOCK;
+    }
+    
+    clearArea(gridX, gridY) {
+        this.grid[gridY][gridX] = TILES.EMPTY;
+    }
+    
+    // =====================================
+    // JOGADOR
+    // =====================================
+    
+    createPlayer() {
+        const x = TILE_SIZE;
+        const y = TILE_SIZE;
+        
+        const player = this.add.graphics();
+        
+        // Corpo (círculo com sombre)
+        player.fillStyle(0x3a3a8a, 1);
+        player.fillCircle(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE / 2 - 2);
+        
+        // Sombra
+        player.fillStyle(0x000022, 0.4);
+        player.fillCircle(x + TILE_SIZE / 2 + 2, y + TILE_SIZE / 2 + 2, TILE_SIZE / 2 - 2);
+        
+        // Detalhe (capacete/lua)
+        player.fillStyle(0x5a5aaa, 1);
+        player.fillCircle(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE / 4);
+        
+        player.setDepth(10);
+        
+        this.player = { x: 1, y: 1, sprite: player };
+    }
+    
+    // =====================================
+    // UPDATE
+    // =====================================
+    
+    update(time, delta) {
+        if (this.gameOver) return;
+        
+        // Cap delta
+        delta = Math.min(delta, 50);
+        
+        // Monitorar performance
+        this.performance.update(time, delta);
+        
+        // Movimento do jogador
+        this.handlePlayerInput(time);
+        
+        // Atualizar bombas
+        this.updateBombs(time);
+        
+        // Atualizar explosões
+        this.updateExplosions(time);
+    }
+    
+    handlePlayerInput(time) {
+        const direction = this.controls.getDirection();
+        
+        if (!direction) return;
+        
+        const moveInterval = 150;
+        
+        if (time > this.lastMove + moveInterval) {
+            this.lastMove = time;
+            
+            const newX = this.player.x + direction.x;
+            const newY = this.player.y + direction.y;
+            
+            // Verificar colisão
+            if (this.canMoveTo(newX, newY)) {
+                this.movePlayer(newX, newY);
             }
         }
-        
-        return false;
     }
+    
+    canMoveTo(gridX, gridY) {
+        if (gridX < 0 || gridX >= GRID_WIDTH) return false;
+        if (gridY < 0 || gridY >= GRID_HEIGHT) return false;
+        
+        const tile = this.grid[gridY][gridX];
+        return tile === TILES.EMPTY;
+    }
+    
+    movePlayer(gridX, gridY) {
+        // Atualizar posição lógica
+        this.player.x = gridX;
+        this.player.y = gridY;
+        
+        // Atualizar posição visual
+        const x = gridX * TILE_SIZE;
+        const y = gridY * TILE_SIZE;
+        
+        this.scene.tweens.add({
+            targets: this.player.sprite,
+            x: x,
+            y: y,
+            duration: 80,
+            ease: 'Linear'
+        });
+        
+        // Efeito de poeira
+        if (this.visualManager) {
+            this.visualManager.createDustEffect(x, y);
+        }
+    }
+    
+    // =====================================
+    // BOMBAS
+    // =====================================
+    
+    placeBomb() {
+        const gridX = this.player.x;
+        const gridY = this.player.y;
+        
+        const x = gridX * TILE_SIZE + TILE_SIZE / 2;
+        const y = gridY * TILE_SIZE + TILE_SIZE / 2;
+        
+        const bomb = this.add.graphics();
+        bomb.fillStyle(0x1a1a1a, 1);
+        bomb.fillCircle(x, y, TILE_SIZE / 2 - 2);
+        bomb.fillStyle(0x4a4a4a, 1);
+        bomb.fillCircle(x, y, TILE_SIZE / 3 - 2);
+        bomb.fillStyle(0x666666, 0.8);
+        bomb.fillCircle(x, y, TILE_SIZE / 5);
+        
+        bomb.setDepth(5);
+        
+        // Animação de pulsar
+        this.tweens.add({
+            targets: bomb,
+            scale: 1.2,
+            duration: 200,
+            yoyo: true,
+            repeat: 4
+        });
+        
+        // explosion após 3 segundos
+        this.time.delayedCall(3000, () => {
+            this.explodeBomb(gridX, gridY);
+            bomb.destroy();
+        });
+        
+        this.bombs.push({
+            x: gridX,
+            y: gridY,
+            sprite: bomb,
+            range: 2
+        });
+    }
+    
+    explodeBomb(gridX, gridY) {
+        const range = 2;
+        
+        // Remover bomba
+        const bombIndex = this.bombs.findIndex(b => b.x === gridX && b.y === gridY);
+        if (bombIndex !== -1) {
+            this.bombs.splice(bombIndex, 1);
+        }
+        
+        // Criar explosão
+        this.createExplosion(gridX, gridY);
+        
+        // Direções da explosão
+        const directions = [
+            { x: 0, y: 0 },
+            { x: 1, y: 0 },
+            { x: -1, y: 0 },
+            { x: 0, y: 1 },
+            { x: 0, y: -1 }
+        ];
+        
+        directions.forEach(dir => {
+            for (let i = 1; i <= range; i++) {
+                const targetX = gridX + dir.x * i;
+                const targetY = gridY + dir.y * i;
+                
+                // Parar se atingir borda
+                if (targetX < 0 || targetX >= GRID_WIDTH ||
+                    targetY < 0 || targetY >= GRID_HEIGHT) break;
+                
+                const tile = this.grid[targetY][targetX];
+                
+                if (tile === TILES.WALL_SOLID) break;
+                
+                if (tile === TILES.WALL_BLOCK) {
+                    this.destroyBlock(targetX, targetY);
+                    break;
+                }
+                
+                if (i <= range) {
+                    this.createExplosion(targetX, targetY);
+                }
+            }
+        });
+        
+        // Câmera shake
+        if (this.visualManager) {
+            this.visualManager.shakeCamera(0.01, 200);
+        }
+    }
+    
+    createExplosion(gridX, gridY) {
+        const x = gridX * TILE_SIZE + TILE_SIZE / 2;
+        const y = gridY * TILE_SIZE + TILE_SIZE / 2;
+        
+        const explosion = this.add.graphics();
+        explosion.fillStyle(0xff4400, 0.9);
+        explosion.fillCircle(x, y, TILE_SIZE / 2);
+        explosion.fillStyle(0xffff00, 0.7);
+        explosion.fillCircle(x, y, TILE_SIZE / 3);
+        explosion.setDepth(15);
+        
+        this.explosions.push({
+            x: gridX,
+            y: gridY,
+            sprite: explosion,
+            time: 0
+        });
+        
+        // Efeito visual
+        if (this.visualManager) {
+            this.visualManager.createExplosionEffect(x - TILE_SIZE / 2, y - TILE_SIZE / 2);
+        }
+    }
+    
+    destroyBlock(gridX, gridY) {
+        const blockIndex = this.blocks.findIndex(b => b.x === gridX && b.y === gridY);
+        
+        if (blockIndex !== -1) {
+            const block = this.blocks[blockIndex];
+            
+            if (this.visualManager) {
+                this.visualManager.createExplosionEffect(
+                    block.sprite.x,
+                    block.sprite.y
+                );
+            }
+            
+            block.sprite.destroy();
+            this.blocks.splice(blockIndex, 1);
+        }
+        
+        this.grid[gridY][gridX] = TILES.EMPTY;
+    }
+    
+    updateBombs(time) {
+        // Atualizar animação das bombas
+    }
+    
+    updateExplosions(time) {
+        // Remover explosões antigas
+        for (let i = this.explosions.length - 1; i >= 0; i--) {
+            const exp = this.explosions[i];
+            exp.time += 16;
+            
+            if (exp.time > 300) {
+                exp.sprite.destroy();
+                this.explosions.splice(i, 1);
+            }
+        }
+    }
+    
+    // =====================================
+    // CONTROLS
+    // =====================================
+    
+    enableBombControl() {
+        const input = this.input;
+        
+        // Espaço para plantar bomba (desktop)
+        input.keyboard.on('keydown', (event) => {
+            if (event.key === ' ' && this.isRunning) {
+                this.placeBomb();
+            }
+        });
+        
+        // Toque longo para bomba (mobile)
+        if (this.controls && this.controls.isMobile) {
+            // Adicionar gesture de long press
+        }
+    }
+    
+    // =====================================
+    // GAME OVER / RESTART
+    // =====================================
     
     endGame() {
         if (this.gameOver) return;
@@ -348,46 +517,41 @@ export default class GameScene extends Phaser.Scene {
         this.uiManager.hideMenu();
         
         this.score = 0;
+        this.lives = 3;
         this.level = 1;
         this.gameOver = false;
         this.isRunning = true;
         
-        // Limpar obstáculos
-        for (const obs of this.obstacles) {
-            Obstacle.destroy(obs);
-        }
-        this.obstacles.length = 0;
+        // Resetar posição
+        this.player.x = 1;
+        this.player.y = 1;
+        this.player.sprite.setPosition(TILE_SIZE, TILE_SIZE);
         
-        this.snake.reset(GameConfig.INITIAL_X, GameConfig.INITIAL_Y);
-        this.spawnFood();
-        
-        this.uiManager.updateScore(0);
-        this.uiManager.updateLevel(1);
+        this.uiManager.updateScore(this.score);
         
         this.audioManager.play('start');
-    }
-    
-    onMenuClick() {
-        if (this.gameOver || !this.isRunning) {
-            this.startGame();
-        }
+        
+        this.enableBombControl();
     }
     
     // =====================================
-    // OTIMIZAÇÃO: Cleanup
+    // CLEANUP
     // =====================================
     
     shutdown() {
-        // Limpar tudo
-        if (this.obstacles) {
-            for (const obs of this.obstacles) {
-                Obstacle.destroy(obs);
-            }
-            this.obstacles.length = 0;
-        }
+        // Limpar gráficos
+        this.walls.forEach(w => w.sprite.destroy());
+        this.blocks.forEach(b => b.sprite.destroy());
+        this.bombs.forEach(b => b.sprite.destroy());
+        this.explosions.forEach(e => e.sprite.destroy());
         
-        if (this.performance) {
-            this.performance.destroy();
+        this.walls.length = 0;
+        this.blocks.length = 0;
+        this.bombs.length = 0;
+        this.explosions.length = 0;
+        
+        if (this.visualManager) {
+            this.visualManager.destroy();
         }
     }
 }
