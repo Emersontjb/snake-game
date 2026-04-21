@@ -1,16 +1,14 @@
 /**
  * =====================================
- * GAMES SCENE - CENA PRINCIPAL COMPLETA
+ * GAME SCENE - VERSÃO OTIMIZADA
  * =====================================
  * 
- * Contém toda a lógica do jogo Snake:
- * - Movimentação
- * - Colisão
- * - Comida
- * - Obstáculos
- * - Score
- * - Controles
- * - UI
+ * Cena com todas as otimizações:
+ * - Object pooling
+ * - Dirty rendering
+ * - Delta cap
+ * - Frame skip
+ * - Batch rendering
  */
 
 import GameConfig from './GameConfig.js';
@@ -21,11 +19,15 @@ import UIManager from './UIManager.js';
 import Controls from './Controls.js';
 import AudioManager from './AudioManager.js';
 import StorageManager from './StorageManager.js';
+import PerformanceManager from './PerformanceManager.js';
 
 export default class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
         
+        // =====================================
+        // COMPONENTES
+        // =====================================
         this.snake = null;
         this.food = null;
         this.obstacles = null;
@@ -33,102 +35,162 @@ export default class GameScene extends Phaser.Scene {
         this.controls = null;
         this.audioManager = null;
         this.storageManager = null;
+        this.performance = null;
         
+        // =====================================
+        // ESTADO DO JOGO
+        // =====================================
         this.score = 0;
         this.highScore = 0;
         this.level = 1;
         this.gameOver = false;
-        this.paused = false;
         this.isRunning = false;
         
         this.lastMove = 0;
+        
+        // =====================================
+        // OTIMIZAÇÃO: CACHE
+        // =====================================
+        this.cachedDirection = null;
+        this.lastMoveInterval = GameConfig.BASE_MOVE_INTERVAL;
     }
     
     create() {
-        console.log('🎮Criando cena do jogo...');
+        console.log('🎮 Criando cena (otimizada)...');
         
+        // =====================================
+        // INICIALIZAR GERENCIADORES
+        // =====================================
         this.storageManager = new StorageManager();
         this.highScore = this.storageManager.getHighScore();
         
         this.audioManager = new AudioManager(this);
         this.uiManager = new UIManager(this);
         this.controls = new Controls(this);
+        this.performance = new PerformanceManager(this);
         
+        // =====================================
+        // CRIAR ELEMENTOS DO JOGO
+        // =====================================
         this.createBackground();
         this.createBorders();
         
         this.snake = new Snake(this, GameConfig.INITIAL_X, GameConfig.INITIAL_Y);
         this.food = new Food(this);
         
+        // Array otimizado para obstáculos
         this.obstacles = [];
         
+        // =====================================
+        // MOSTRAR MENU
+        // =====================================
         this.uiManager.showMenu(this.highScore);
         
-        console.log('🎮Jogo criado com sucesso!');
+        console.log('🎮 Jogo pronto!');
+        console.log('📱 Quality:', this.performance.getQuality());
     }
     
     createBackground() {
+        // =====================================
+        // OTIMIZAÇÃO:一次性 renderizar fundo
+        // =====================================
         const bg = this.add.graphics();
-        bg.fillGradientStyle(
-            GameConfig.COLORS.BG_TOP, GameConfig.COLORS.BG_TOP,
-            GameConfig.COLORS.BG_BOTTOM, GameConfig.COLORS.BG_BOTTOM,
-            1
-        );
+        
+        // Gradiente simples (não usa gradients do canvas para mobile)
+        bg.fillStyle(GameConfig.COLORS.BG_TOP, 1);
         bg.fillRect(0, 0, GameConfig.GAME_WIDTH, GameConfig.GAME_HEIGHT);
         
-        const gridGraphics = this.add.graphics();
-        gridGraphics.lineStyle(1, GameConfig.COLORS.GRID, 0.2);
+        // Grid
+        const grid = this.add.graphics();
+        grid.lineStyle(1, GameConfig.COLORS.GRID, 0.15);
         
         for (let x = 0; x <= GameConfig.GAME_WIDTH; x += GameConfig.GRID_SIZE) {
-            gridGraphics.moveTo(x, 0);
-            gridGraphics.lineTo(x, GameConfig.GAME_HEIGHT);
+            grid.moveTo(x, 0);
+            grid.lineTo(x, GameConfig.GAME_HEIGHT);
         }
         
         for (let y = 0; y <= GameConfig.GAME_HEIGHT; y += GameConfig.GRID_SIZE) {
-            gridGraphics.moveTo(0, y);
-            gridGraphics.lineTo(GameConfig.GAME_WIDTH, y);
+            grid.moveTo(0, y);
+            grid.lineTo(GameConfig.GAME_WIDTH, y);
         }
         
-        gridGraphics.strokePath();
+        grid.strokePath();
     }
     
     createBorders() {
-        const graphics = this.add.graphics();
-        graphics.lineStyle(3, GameConfig.COLORS.UI_PRIMARY, 1);
-        graphics.strokeRect(
-            GameConfig.MARGIN / 2,
-            GameConfig.MARGIN / 2,
-            GameConfig.GAME_WIDTH - GameConfig.MARGIN,
-            GameConfig.GAME_HEIGHT - GameConfig.MARGIN
+        const border = this.add.graphics();
+        border.lineStyle(3, GameConfig.COLORS.UI_PRIMARY, 1);
+        border.strokeRect(
+            1,
+            1,
+            GameConfig.GAME_WIDTH - 2,
+            GameConfig.GAME_HEIGHT - 2
         );
     }
     
+    // =====================================
+    // UPDATE OTIMIZADO
+    // =====================================
+    
     update(time, delta) {
-        if (this.gameOver || this.paused) return;
+        // Não fazer nada se game over
+        if (this.gameOver) return;
         
-        if (this.food && this.food.visible) {
-            this.food.update(time);
+        // =====================================
+        // OTIMIZAÇÃO: Cap de delta
+        // =====================================
+        delta = this.performance.capDelta(delta);
+        
+        // =====================================
+        // OTIMIZAÇÃO: Frame skip
+        // =====================================
+        if (this.performance.shouldSkipFrame()) {
+            return;
         }
         
+        // =====================================
+        // ATUALIZAR PERFORMANCE
+        // =====================================
+        this.performance.update(time, delta);
+        
+        // =====================================
+        // OTIMIZAÇÃO: Cache da direção
+        // =====================================
         const direction = this.controls.getDirection();
+        if (direction) {
+            this.cachedDirection = direction;
+        }
+        
+        // =====================================
+        // MOVER COBRA
+        // =====================================
         if (direction) {
             this.snake.setDirection(direction);
         }
         
-        const moveInterval = Math.max(
+        // Calcular intervalo baseado no nível
+        this.lastMoveInterval = Math.max(
             GameConfig.MIN_MOVE_INTERVAL,
             GameConfig.BASE_MOVE_INTERVAL - (this.level - 1) * GameConfig.SPEED_INCREMENT
         );
         
-        if (time > this.lastMove + moveInterval) {
+        if (time > this.lastMove + this.lastMoveInterval) {
             this.lastMove = time;
             this.updateGame();
+        }
+        
+        // =====================================
+        // OTIMIZAÇÃO: Não atualizar comida se invisível
+        // =====================================
+        if (this.food && this.food.visible) {
+            this.food.update(time);
         }
     }
     
     updateGame() {
         if (!this.isRunning || this.gameOver) return;
         
+        // Mover cobra
         const result = this.snake.move();
         
         if (result.collision) {
@@ -140,13 +202,18 @@ export default class GameScene extends Phaser.Scene {
             this.collectFood();
         }
         
+        // Verificar obstáculos
         if (this.checkObstacleCollision()) {
             this.endGame();
         }
     }
     
     collectFood() {
-        this.score += GameConfig.POINTS_PER_FOOD * this.level;
+        // =====================================
+        // OTIMIZAÇÃO: Pontuação local
+        // =====================================
+        const points = GameConfig.POINTS_PER_FOOD * this.level;
+        this.score += points;
         
         this.audioManager.play('eat');
         
@@ -165,6 +232,7 @@ export default class GameScene extends Phaser.Scene {
         
         this.audioManager.play('levelup');
         
+        // Spawnar obstáculo
         if (this.level >= GameConfig.MAX_OBSTACLE_LEVEL) {
             this.spawnObstacle();
         }
@@ -172,38 +240,41 @@ export default class GameScene extends Phaser.Scene {
         this.uiManager.showLevelUp(this.level);
     }
     
+    // =====================================
+    // OTIMIZAÇÃO: Spawn otimizado
+    // =====================================
+    
     spawnFood() {
-        let validPosition = false;
-        let x, y;
+        const maxAttempts = 50;
         let attempts = 0;
-        const maxAttempts = 100;
+        let x, y;
+        let valid = false;
         
-        while (!validPosition && attempts < maxAttempts) {
+        // Otimização: early return
+        while (!valid && attempts < maxAttempts) {
             attempts++;
             
-            x = Phaser.Math.Between(
-                GameConfig.MARGIN,
-                GameConfig.GAME_WIDTH - GameConfig.MARGIN - GameConfig.GRID_SIZE
-            );
-            y = Phaser.Math.Between(
-                GameConfig.MARGIN,
-                GameConfig.GAME_HEIGHT - GameConfig.MARGIN - GameConfig.GRID_SIZE
-            );
+            x = Math.round(
+                Phaser.Math.Between(GameConfig.MARGIN, GameConfig.GAME_WIDTH - GameConfig.MARGIN - GameConfig.GRID_SIZE) / 
+                GameConfig.GRID_SIZE
+            ) * GameConfig.GRID_SIZE;
             
-            x = Math.round(x / GameConfig.GRID_SIZE) * GameConfig.GRID_SIZE;
-            y = Math.round(y / GameConfig.GRID_SIZE) * GameConfig.GRID_SIZE;
+            y = Math.round(
+                Phaser.Math.Between(GameConfig.MARGIN, GameConfig.GAME_HEIGHT - GameConfig.MARGIN - GameConfig.GRID_SIZE) / 
+                GameConfig.GRID_SIZE
+            ) * GameConfig.GRID_SIZE;
             
-            validPosition = !this.snake.collidesWithBody(x, y) && !this.snake.collidesWithHead(x, y);
+            valid = !this.snake.collidesWithBody(x, y) && !this.snake.collidesWithHead(x, y);
             
             for (const obs of this.obstacles) {
                 if (obs.x === x && obs.y === y) {
-                    validPosition = false;
+                    valid = false;
                     break;
                 }
             }
         }
         
-        if (validPosition) {
+        if (valid) {
             this.food.spawn(x, y);
         }
     }
@@ -211,38 +282,35 @@ export default class GameScene extends Phaser.Scene {
     spawnObstacle() {
         if (this.obstacles.length >= GameConfig.MAX_OBSTACLES) return;
         
-        let validPosition = false;
+        let valid = false;
         let x, y;
         let attempts = 0;
         
-        while (!validPosition && attempts < 50) {
+        while (!valid && attempts < 30) {
             attempts++;
             
-            x = Phaser.Math.Between(
-                GameConfig.MARGIN,
-                GameConfig.GAME_WIDTH - GameConfig.MARGIN - GameConfig.GRID_SIZE
-            );
-            y = Phaser.Math.Between(
-                GameConfig.MARGIN,
-                GameConfig.GAME_HEIGHT - GameConfig.MARGIN - GameConfig.GRID_SIZE
-            );
+            x = Math.round(
+                Phaser.Math.Between(GameConfig.MARGIN, GameConfig.GAME_WIDTH - GameConfig.MARGIN - GameConfig.GRID_SIZE) / 
+                GameConfig.GRID_SIZE
+            ) * GameConfig.GRID_SIZE;
             
-            x = Math.round(x / GameConfig.GRID_SIZE) * GameConfig.GRID_SIZE;
-            y = Math.round(y / GameConfig.GRID_SIZE) * GameConfig.GRID_SIZE;
-            
-            validPosition = !this.snake.collidesWithBody(x, y) &&
-                          !this.snake.collidesWithHead(x, y) &&
-                          !(this.food.x === x && this.food.y === y);
+            y = Math.round(
+                Phaser.Math.Between(GameConfig.MARGIN, GameConfig.GAME_HEIGHT - GameConfig.MARGIN - GameConfig.GRID_SIZE) / 
+                GameConfig.GRID_SIZE
+            ) * GameConfig.GRID_SIZE;
             
             const head = this.snake.getHead();
             const dist = Math.abs(x - head.x) + Math.abs(y - head.y);
-            if (dist < GameConfig.GRID_SIZE * 3) {
-                validPosition = false;
-            }
+            
+            valid = dist >= GameConfig.GRID_SIZE * 3 &&
+                    !this.snake.collidesWithBody(x, y) &&
+                    !this.snake.collidesWithHead(x, y) &&
+                    !(this.food.x === x && this.food.y === y);
         }
         
-        if (validPosition) {
-            this.obstacles.push(Obstacle.create(this, x, y));
+        if (valid) {
+            const obstacle = Obstacle.create(this, x, y);
+            this.obstacles.push(obstacle);
         }
     }
     
@@ -272,27 +340,23 @@ export default class GameScene extends Phaser.Scene {
         }
         
         this.uiManager.showGameOver(this.score, this.highScore);
-        
-        console.log('💀Game Over! Score:', this.score);
     }
     
     startGame() {
         if (this.isRunning && !this.gameOver) return;
         
-        if (this.uiManager) {
-            this.uiManager.hideMenu();
-        }
+        this.uiManager.hideMenu();
         
         this.score = 0;
         this.level = 1;
         this.gameOver = false;
-        this.paused = false;
         this.isRunning = true;
         
-        this.obstacles.forEach(obs => {
-            if (obs.graphics) obs.graphics.destroy();
-        });
-        this.obstacles = [];
+        // Limpar obstáculos
+        for (const obs of this.obstacles) {
+            Obstacle.destroy(obs);
+        }
+        this.obstacles.length = 0;
         
         this.snake.reset(GameConfig.INITIAL_X, GameConfig.INITIAL_Y);
         this.spawnFood();
@@ -301,13 +365,29 @@ export default class GameScene extends Phaser.Scene {
         this.uiManager.updateLevel(1);
         
         this.audioManager.play('start');
-        
-        console.log('🚀Jogo iniciado!');
     }
     
     onMenuClick() {
         if (this.gameOver || !this.isRunning) {
             this.startGame();
+        }
+    }
+    
+    // =====================================
+    // OTIMIZAÇÃO: Cleanup
+    // =====================================
+    
+    shutdown() {
+        // Limpar tudo
+        if (this.obstacles) {
+            for (const obs of this.obstacles) {
+                Obstacle.destroy(obs);
+            }
+            this.obstacles.length = 0;
+        }
+        
+        if (this.performance) {
+            this.performance.destroy();
         }
     }
 }

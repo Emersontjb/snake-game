@@ -1,9 +1,10 @@
 /**
  * =====================================
- * SNAKE GAME - ENTRY POINT COM RESPOSTA COMPLETA
+ * SNAKE GAME - ENTRY POINT OTIMIZADO
  * =====================================
  * 
- * Ponto de entrada com suporte responsivo nativo Phaser.
+ * Ponto de entrada com configurações
+ * de performance otimizadas.
  */
 
 import GameScene from './GameScene.js';
@@ -13,45 +14,48 @@ const config = {
     parent: 'game-container',
     
     // =====================================
-    // ESCALA RESPONSIVA (PHASER NATIVO)
+    // ESCALA RESPONSIVA
     // =====================================
     scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
         width: 400,
         height: 600,
-        resizeInterval: 200,
-        refreshEvent: 'onDomResize'
+        resizeInterval: 250
     },
     
     // =====================================
-    // RENDERIZAÇÃO
+    // RENDERIZAÇÃO OTIMIZADA
     // =====================================
     render: {
         pixelArt: false,
         antialias: true,
         roundPixels: true,
         powerPreference: 'high-performance',
-        backgroundColor: '#1a1a2e'
-    },
-    
-    // =====================================
-    // FÍSICA
-    // =====================================
-    physics: {
-        default: 'arcade',
-        arcade: {
-            debug: false
+        backgroundColor: '#1a1a2e',
+        
+        // WebGL options
+        webgl: {
+            antialias: true,
+            alpha: false,
+            premultipliedAlpha: false,
+            failIfMajorPerformanceCaveat: false
         }
     },
     
-    // =====================================
-    // CENAS
-    // =====================================
+    physics: {
+        default: 'arcade',
+        arcade: {
+            debug: false,
+            gravity: { y: 0 },
+            debugBodyColor: 0x00ff88
+        }
+    },
+    
     scene: [GameScene],
     
     // =====================================
-    // FPS
+    // FPS OTIMIZADO
     // =====================================
     fps: {
         target: 60,
@@ -60,182 +64,67 @@ const config = {
     },
     
     // =====================================
-    // DOM
+    // SETTINGS EXTRAS
     // =====================================
-    dom: {
-        createContainer: true,
-        pool: true
+    fpsLimit: 60,
+    autoFocus: true,
+    canvas2D: {
+        willReadFrequently: false
     }
 };
-
-// =====================================
-// CRIAR JOGO
-// =====================================
 
 const game = new Phaser.Game(config);
 
 // =====================================
-// RESPONSIVE HELPERS
+// DETECÇÃO E LOG
 // =====================================
 
-const Responsive = {
-    // Obter escala atual
-    getScale() {
-        return game.loop.deltaRatio;
-    },
-    
-    // Obter tamanho do jogo
-    getGameSize() {
-        return { width: 400, height: 600 };
-    },
-    
-    // Obter tamanho da tela
-    getDisplaySize() {
-        return {
-            width: game.canvas.width,
-            height: game.canvas.height
-        };
-    },
-    
-    // Obter escala visual
-    getDisplayScale() {
-        return {
-            x: game.canvas.width / 400,
-            y: game.canvas.height / 600
-        };
-    },
-    
-    // Verificar plataforma
-    isMobile() {
-        return window.innerWidth < 768 || 'ontouchstart' in window;
-    },
-    
-    isTablet() {
-        return window.innerWidth >= 768 && window.innerWidth < 1024;
-    },
-    
-    isDesktop() {
-        return window.innerWidth >= 1024;
-    },
-    
-    isPortrait() {
-        return window.innerHeight > window.innerWidth;
-    },
-    
-    isLandscape() {
-        return window.innerWidth > window.innerHeight;
-    },
-    
-    // Fullscreen
-    async enterFullscreen() {
-        try {
-            await document.documentElement.requestFullscreen();
-        } catch (e) {
-            try {
-                await document.documentElement.webkitRequestFullscreen();
-            } catch (e2) {}
-        }
-    },
-    
-    async exitFullscreen() {
-        try {
-            await document.exitFullscreen();
-        } catch (e) {
-            try {
-                await document.webkitExitFullscreen();
-            } catch (e2) {}
-        }
-    },
-    
-    toggleFullscreen() {
-        if (document.fullscreenElement || document.webkitFullscreenElement) {
-            this.exitFullscreen();
-        } else {
-            this.enterFullscreen();
-        }
-    },
-    
-    isFullscreen() {
-        return !!(
-            document.fullscreenElement ||
-            document.webkitFullscreenElement ||
-            document.mozFullScreenElement
-        );
-    },
-    
-    // Converter coordenadas
-    screenToGame(screenX, screenY) {
-        const rect = game.canvas.getBoundingClientRect();
-        const scaleX = 400 / rect.width;
-        const scaleY = 600 / rect.height;
-        
-        return {
-            x: (screenX - rect.left) * scaleX,
-            y: (screenY - rect.top) * scaleY
-        };
-    },
-    
-    gameToScreen(gameX, gameY) {
-        const rect = game.canvas.getBoundingClientRect();
-        
-        return {
-            x: rect.left + (gameX / 400) * rect.width,
-            y: rect.top + (gameY / 600) * rect.height
-        };
-    },
-    
-    // Obter hit area do canvas
-    getCanvasBounds() {
-        return game.canvas.getBoundingClientRect();
-    }
-};
-
-// =====================================
-// EVENTOS DE RESIZE
-// =====================================
-
-let resizeTimeout;
-
-function handleResize() {
-    if (resizeTimeout) {
-        clearTimeout(resizeTimeout);
-    }
-    
-    resizeTimeout = setTimeout(() => {
-        game.scale.refresh();
-        
-        const bounds = Responsive.getCanvasBounds();
-        
-        console.log('📐 Resize:', {
-            window: `${window.innerWidth}x${window.innerHeight}`,
-            canvas: `${game.canvas.width}x${game.canvas.height}`,
-            display: `${bounds.width.toFixed(0)}x${bounds.height.toFixed(0)}`,
-            scale: Responsive.getDisplayScale()
-        });
-    }, 150);
-}
-
-// =====================================
-// LISTENERS
-// =====================================
-
-window.addEventListener('resize', handleResize);
-window.addEventListener('orientationchange', () => {
-    setTimeout(handleResize, 100);
-});
-
-document.addEventListener('fullscreenchange', handleResize);
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-        handleResize();
-    }
-});
-
-// =====================================
-// LOG INICIAL
-// =====================================
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const isLowRam = navigator.deviceMemory && navigator.deviceMemory < 4;
 
 console.log('🐍 Snake Game carregado!');
-console.log('📱', Responsive.isMobile() ? 'Mobile' : 'Desktop');
-console.log('📐', `${window.innerWidth}x${window.innerHeight}`);
-console.log('🖥️ Displayscale:`, Responsive.getDisplayScale());
+console.log('📱 Dispositivo:', isMobile ? 'Mobile' : 'Desktop');
+console.log('💾 RAM:', navigator.deviceMemory ? navigator.deviceMemory + 'GB' : 'Desconhecida');
+console.log('⚡ Renderer:', game.renderer.type);
+
+// =====================================
+// FULLSCREEN TOGGLE (opcional)
+// =====================================
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'f' || e.key === 'F') {
+        if (document.fullscreenElement) {
+            document.exitFullscreen?.();
+        } else {
+            document.documentElement.requestFullscreen?.();
+        }
+    }
+});
+
+// =====================================
+// PREVENIR ZOOM INDESEJADO
+// =====================================
+
+document.addEventListener('touchmove', (e) => {
+    if (e.touches.length > 1) {
+        e.preventDefault();
+    }
+}, { passive: false });
+
+document.addEventListener('gesturestart', (e) => {
+    if (e.touches.length > 1) {
+        e.preventDefault();
+    }
+});
+
+document.addEventListener('gesturechange', (e) => {
+    e.preventDefault();
+});
+
+// =====================================
+// CLEANUP AO FECHAR
+// =====================================
+
+window.addEventListener('beforeunload', () => {
+    game.destroy(true);
+});
