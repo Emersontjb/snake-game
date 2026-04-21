@@ -1,10 +1,22 @@
 /**
  * =====================================
- * GAME SCENE - COMPLETO COM TILEMAP + LIGHTING
+ * GAME SCENE - SNAKE CLÁSSICO
  * =====================================
+ * Movimento estilo Snake,
+ * corpo segmentado,
+ * crescimento,
+ * comidas especiais
  */
 
-import TILES from './TileMapManager.js';
+import SnakeVisualManager from './SnakeVisualManager.js';
+import FoodManager from './FoodManager.js';
+import DimensionManager from './DimensionManager.js';
+import GraphicsOptimizer from './GraphicsOptimizer.js';
+
+const COLORS = {
+    PLAYER: 0x3d6a4d,
+    PLAYER_DETAIL: 0x4d7a5d
+};
 
 export default class GameScene extends Phaser.Scene {
     constructor() {
@@ -12,197 +24,331 @@ export default class GameScene extends Phaser.Scene {
         
         this.tileMap = null;
         this.lighting = null;
+        this.visualManager = null;
+        this.dimensionManager = null;
+        this.graphicsOptimizer = null;
         
-        this.player = null;
-        this.bombs = [];
+        this.snake = [];
+        this.snakeContainer = null;
+        this.direction = { x: 1, y: 0 };
+        this.nextDirection = { x: 1, y: 0 };
+        this.lastMove = 0;
+        this.baseMoveInterval = 150;
+        this.currentMoveInterval = 150;
+        
+        this.foodManager = null;
         
         this.score = 0;
         this.highScore = 0;
         this.gameOver = false;
         this.isRunning = false;
         
-        this.lastMove = 0;
+        this.activeEffects = [];
     }
     
     create() {
-        console.log('🎮 Inicializando jogo...');
+        console.log('🐍 Inicializando Snake...');
         
-        // High score
         this.highScore = this.getHighScore();
         
-        // Tilemap
         this.tileMap = new (require('./TileMapManager.js').default)(this);
         this.tileMap.buildMap();
         
-        // Iluminação
         this.lighting = new (require('./LightingManager.js').default)(this, {
-            ambient: { r: 0.1, g: 0.1, b: 0.15 },
-            ambientIntensity: 0.5
+            ambient: { r: 0.08, g: 0.1, b: 0.12 },
+            ambientIntensity: 0.4
         });
         this.lighting.enable();
         
-        // Controles
+        this.visualManager = new SnakeVisualManager(this);
+        
+        this.graphicsOptimizer = new GraphicsOptimizer(this);
+        
+        this.dimensionManager = new DimensionManager(this);
+        this.dimensionManager.setDimension('NORMAL');
+        
+        this.foodManager = new FoodManager(this);
+        
         this.controls = new (require('./Controls.js').default)(this);
-        
-        // Áudio
         this.audioManager = new (require('./AudioManager.js').default)(this);
-        
-        // UI
         this.uiManager = new (require('./UIManager.js').default)(this);
         
-        // Jogador
-        this.createPlayer();
+        this.createInitialSnake();
+        this.foodManager.spawn();
         
-        // Menu inicial
         this.uiManager.showMenu(this.highScore);
-        
-        // Setup controls
         this.setupControls();
         
-        console.log('🎮 Jogo pronto!');
+        console.log('🐍 Jogo pronto!');
     }
     
-    createPlayer() {
-        const x = 1 * 20 + 10;
-        const y = 1 * 20 + 10;
+    createInitialSnake() {
+        const startX = 5;
+        const startY = 5;
         
-        const player = this.add.graphics();
+        this.snakeContainer = this.add.container(0, 0);
+        this.snakeContainer.setDepth(20);
         
-        // Sombra
-        player.fillStyle(0x000022, 0.5);
-        player.fillCircle(x + 2, y + 2, 8);
+        this.snake = [];
         
-        // Corpo
-        player.fillStyle(COLORS.PLAYER, 1);
-        player.fillCircle(x, y, 8);
+        for (let i = 2; i >= 0; i--) {
+            const segment = this.createSnakeSegment(i === 0 ? 'head' : 'body', i);
+            const x = startX - i;
+            const y = startY;
+            
+            segment.setPosition(x * 20 + 10, y * 20 + 10);
+            this.snakeContainer.add(segment);
+            
+            this.snake.push({
+                gridX: x,
+                gridY: y,
+                sprite: segment,
+                type: i === 0 ? 'head' : 'body'
+            });
+        }
         
-        // Capacete
-        player.fillStyle(COLORS.PLAYER_DETAIL, 1);
-        player.fillCircle(x, y - 2, 5);
+        this.direction = { x: 1, y: 0 };
+        this.nextDirection = { x: 1, y: 0 };
         
-        // Visor
-        player.fillStyle(0x2a2a6a, 1);
-        player.fillCircle(x, y - 2, 3);
+        this.lighting.updatePlayerGlow(
+            this.snake[0].sprite.x,
+            this.snake[0].sprite.y,
+            true
+        );
+    }
+    
+    createSnakeSegment(type, index) {
+        const graphics = this.add.graphics();
         
-        player.setDepth(20);
+        const x = 0;
+        const y = 0;
         
-        this.player = {
-            gridX: 1,
-            gridY: 1,
-            sprite: player,
-            x: x,
-            y: y
-        };
+        if (type === 'head') {
+            graphics.fillStyle(0x3d6a4d, 1);
+            graphics.fillCircle(x, y, 9);
+            
+            graphics.fillStyle(0x4d7a5d, 0.4);
+            graphics.fillCircle(x - 2, y - 2, 4);
+            
+            graphics.fillStyle(0xeeeeee, 1);
+            graphics.fillCircle(x - 3, y - 3, 3);
+            graphics.fillCircle(x + 3, y - 3, 3);
+            
+            graphics.fillStyle(0x111111, 1);
+            graphics.fillCircle(x - 3, y - 2, 2);
+            graphics.fillCircle(x + 3, y - 2, 2);
+            
+            graphics.fillStyle(0xffffff, 0.9);
+            graphics.fillCircle(x - 4, y - 4, 1);
+            graphics.fillCircle(x + 2, y - 4, 1);
+        } else {
+            const variation = index % 3;
+            const baseColor = variation === 0 ? 0x2d5a3d :
+                             variation === 1 ? 0x3d6a4d : 0x1d4a2d;
+            
+            graphics.fillStyle(baseColor, 1);
+            graphics.fillCircle(x, y, 8);
+            
+            graphics.fillStyle(0x4d7a5d, 0.25);
+            for (let i = 0; i < 3; i++) {
+                const sx = (Math.random() - 0.5) * 12;
+                const sy = (Math.random() - 0.5) * 12;
+                graphics.fillCircle(x + sx, y + sy, 2);
+            }
+            
+            graphics.fillStyle(0x5d8a6d, 0.2);
+            graphics.fillCircle(x - 2, y - 2, 2);
+        }
         
-        // Glow do jogador
-        this.lighting.updatePlayerGlow(x, y, true);
+        graphics.setDepth(20);
+        
+        return graphics;
     }
     
     update(time, delta) {
         if (this.gameOver || !this.isRunning) return;
         
-        // Input
-        const direction = this.controls.getDirection();
+        const inputDir = this.controls.getDirection();
         
-        if (direction) {
-            const moveInterval = Math.max(50, 120 - this.score / 100 * 5);
-            
-            if (time > this.lastMove + moveInterval) {
-                this.lastMove = time;
-                
-                const newX = this.player.gridX + direction.x;
-                const newY = this.player.gridY + direction.y;
-                
-                if (this.tileMap.isWalkable(newX, newY)) {
-                    this.movePlayer(newX, newY);
-                }
+        if (inputDir) {
+            if (inputDir.x !== -this.direction.x || inputDir.y !== -this.direction.y) {
+                this.nextDirection = { ...inputDir };
             }
         }
         
-        // Atualizar bombas
-        for (let i = this.bombs.length - 1; i >= 0; i--) {
-            const bomb = this.bombs[i];
-            bomb.time += delta;
-            
-            if (bomb.time > 3000 && !bomb.exploded) {
-                bomb.exploded = true;
-                this.explodeBomb(bomb.gridX, bomb.gridY);
-                
-                if (bomb.lightRef && bomb.lightRef.stopPulse) {
-                    bomb.lightRef.stopPulse();
-                }
-            }
+        const moveInterval = Math.max(80, this.currentMoveInterval);
+        
+        if (time > this.lastMove + moveInterval) {
+            this.lastMove = time;
+            this.moveSnake();
+        }
+        
+        this.updateEffects(time, delta);
+        
+        if (this.dimensionManager) {
+            this.dimensionManager.update(time, delta);
+        }
+        
+        if (this.graphicsOptimizer) {
+            this.graphicsOptimizer.updateParticles(delta);
         }
     }
     
-    movePlayer(gridX, gridY) {
-        this.player.gridX = gridX;
-        this.player.gridY = gridY;
+    moveSnake() {
+        this.direction = { ...this.nextDirection };
         
-        const targetX = gridX * 20 + 10;
-        const targetY = gridY * 20 + 10;
+        const head = this.snake[0];
+        const newX = head.gridX + this.direction.x;
+        const newY = head.gridY + this.direction.y;
         
-        this.scene.tweens.add({
-            targets: this.player.sprite,
+        if (!this.tileMap.isWalkable(newX, newY)) {
+            this.endGame();
+            return;
+        }
+        
+        for (let i = 1; i < this.snake.length; i++) {
+            if (this.snake[i].gridX === newX && this.snake[i].gridY === newY) {
+                this.endGame();
+                return;
+            }
+        }
+        
+        const targetX = newX * 20 + 10;
+        const targetY = newY * 20 + 10;
+        
+        const foodData = this.foodManager.currentFood;
+        const ateFood = (foodData && foodData.gridX === newX && foodData.gridY === newY);
+        
+        if (ateFood) {
+            this.handleFoodConsumption(foodData);
+        }
+        
+        if (ateFood && foodData.config.grow) {
+            const newSegment = this.createSnakeSegment('body', this.snake.length - 1);
+            const tail = this.snake[this.snake.length - 1];
+            newSegment.setPosition(tail.sprite.x, tail.sprite.y);
+            this.snakeContainer.add(newSegment);
+            
+            this.snake.push({
+                gridX: tail.gridX,
+                gridY: tail.gridY,
+                sprite: newSegment,
+                type: 'body'
+            });
+        }
+        
+        for (let i = this.snake.length - 1; i > 0; i--) {
+            this.snake[i].gridX = this.snake[i - 1].gridX;
+            this.snake[i].gridY = this.snake[i - 1].gridY;
+        }
+        
+        this.snake[0].gridX = newX;
+        this.snake[0].gridY = newY;
+        
+        const moveDuration = this.currentMoveInterval * 0.8;
+        
+        this.tweens.add({
+            targets: this.snake[0].sprite,
             x: targetX,
             y: targetY,
-            duration: 70,
-            ease: 'Linear',
-            onComplete: () => {
-                this.player.x = targetX;
-                this.player.y = targetY;
-                this.lighting.updatePlayerGlow(targetX, targetY, true);
-            }
+            duration: moveDuration,
+            ease: 'Linear'
+        });
+        
+        for (let i = 1; i < this.snake.length; i++) {
+            const targetSegX = this.snake[i].gridX * 20 + 10;
+            const targetSegY = this.snake[i].gridY * 20 + 10;
+            
+            this.tweens.add({
+                targets: this.snake[i].sprite,
+                x: targetSegX,
+                y: targetSegY,
+                duration: moveDuration,
+                ease: 'Linear'
+            });
+        }
+        
+        if (ateFood) {
+            this.lighting.updatePlayerGlow(targetX, targetY, true);
+        }
+        
+        this.updateHeadRotation();
+    }
+    
+    handleFoodConsumption(foodData) {
+        const config = foodData.config;
+        
+        this.score += config.score;
+        if (this.score < 0) this.score = 0;
+        this.uiManager.updateScore(this.score);
+        
+        if (config.duration !== 0) {
+            this.applySpeedEffect(config.duration);
+        }
+        
+        if (config.explodeRadius > 0) {
+            this.createExplosionAt(foodData.gridX, foodData.gridY, config.explodeRadius);
+        }
+        
+        if (config.teleport) {
+            this.teleportRandom();
+        }
+        
+        if (config.changeDimension) {
+            this.changeDimension();
+        }
+        
+        this.foodManager.consume();
+        this.foodManager.spawn();
+        
+        this.audioManager.play('eat');
+    }
+    
+    changeDimension() {
+        const newDim = this.dimensionManager.getRandomDimension();
+        
+        this.dimensionManager.transitionTo(newDim, 800);
+        
+        this.cameras.main.shake(200, 0.005);
+        
+        this.createDimensionChangeEffect();
+    }
+    
+    createDimensionChangeEffect() {
+        const flash = this.add.graphics();
+        
+        flash.fillStyle(0xffffff, 0.4);
+        flash.fillRect(0, 0, 300, 220);
+        
+        flash.setDepth(200);
+        
+        this.tweens.add({
+            targets: flash,
+            alpha: 0,
+            duration: 500,
+            ease: 'Quad.easeOut',
+            onComplete: () => flash.destroy()
         });
     }
     
-    placeBomb() {
-        if (this.gameOver || !this.isRunning) return;
+    applySpeedEffect(duration) {
+        const effect = {
+            type: 'speed',
+            duration: duration,
+            startTime: Date.now(),
+            originalInterval: this.baseMoveInterval
+        };
         
-        const gridX = this.player.gridX;
-        const gridY = this.player.gridY;
+        if (duration < 0) {
+            this.currentMoveInterval = Math.max(50, this.baseMoveInterval * 1.5);
+        } else {
+            this.currentMoveInterval = Math.min(300, this.baseMoveInterval * 0.5);
+        }
         
-        // Verificar se já tem bomba
-        if (this.bombs.some(b => b.gridX === gridX && b.gridY === gridY)) return;
-        
-        const x = gridX * 20 + 10;
-        const y = gridY * 20 + 10;
-        
-        const bomb = this.add.graphics();
-        bomb.fillStyle(0x2a2a2a, 1);
-        bomb.fillCircle(x, y, 9);
-        bomb.fillStyle(0x4a4a4a, 1);
-        bomb.fillCircle(x, y, 7);
-        bomb.fillStyle(0x6a6a6a, 0.8);
-        bomb.fillCircle(x, y, 4);
-        
-        bomb.setDepth(15);
-        
-        // Luz da bomba
-        const lightRef = this.lighting.createBombLight(x, y);
-        
-        // Animação pulsar
-        this.scene.tweens.add({
-            targets: bomb,
-            scaleX: 1.1,
-            scaleY: 1.1,
-            duration: 150,
-            yoyo: true,
-            repeat: 20
-        });
-        
-        this.bombs.push({
-            gridX, gridY,
-            sprite: bomb,
-            time: 0,
-            exploded: false,
-            lightRef
-        });
+        this.activeEffects.push(effect);
     }
     
-    explodeBomb(gridX, gridY) {
-        const range = 2;
-        
+    createExplosionAt(gridX, gridY, radius) {
         const directions = [
             { x: 0, y: 0 },
             { x: 1, y: 0 },
@@ -212,7 +358,7 @@ export default class GameScene extends Phaser.Scene {
         ];
         
         directions.forEach(dir => {
-            for (let i = 0; i <= range; i++) {
+            for (let i = 0; i <= radius; i++) {
                 if (i === 0 && (dir.x !== 0 || dir.y !== 0)) continue;
                 
                 const targetX = gridX + dir.x * i;
@@ -222,47 +368,27 @@ export default class GameScene extends Phaser.Scene {
                 
                 const tile = this.tileMap.getTile(targetX, targetY);
                 
-                if (tile && tile.type === TILES.WALL_INDESTRUCTIBLE) break;
+                if (tile && tile.type === 1) break;
                 
-                if (tile && tile.type === TILES.WALL_DESTRUCTIBLE) {
-                    this.tileMap.removeBlock(targetX, targetY);
-                    if (i > 0) {
-                        this.endGame();
-                    }
-                    break;
-                }
-                
-                if (i <= range) {
-                    this.createExplosion(targetX, targetY);
+                if (i <= radius) {
+                    this.createExplosionEffect(targetX, targetY);
                 }
             }
         });
         
-        // Remover bomba original
-        const bombIndex = this.bombs.findIndex(b => b.gridX === gridX && b.gridY === gridY);
-        if (bombIndex !== -1) {
-            this.bombs[bombIndex].sprite.destroy();
-            this.bombs.splice(bombIndex, 1);
-        }
-        
-        // Câmera shake
         this.cameras.main.shake(150, 0.01);
-        
-        // Efeito de luz
-        this.lighting.createExplosionLight(gridX * 20 + 10, gridY * 20 + 10);
     }
     
-    createExplosion(gridX, gridY) {
+    createExplosionEffect(gridX, gridY) {
         const x = gridX * 20 + 10;
         const y = gridY * 20 + 10;
         
-        // Flash
         const flash = this.add.graphics();
         flash.fillStyle(0xffffff, 0.9);
         flash.fillCircle(x, y, 15);
         flash.setDepth(100);
         
-        this.scene.tweens.add({
+        this.tweens.add({
             targets: flash,
             alpha: 0,
             scale: 2,
@@ -270,7 +396,6 @@ export default class GameScene extends Phaser.Scene {
             onComplete: () => flash.destroy()
         });
         
-        // Fogo
         const fire = this.add.graphics();
         fire.fillStyle(0xff6600, 0.8);
         fire.fillCircle(x, y, 12);
@@ -278,7 +403,7 @@ export default class GameScene extends Phaser.Scene {
         fire.fillCircle(x, y, 8);
         fire.setDepth(101);
         
-        this.scene.tweens.add({
+        this.tweens.add({
             targets: fire,
             alpha: 0,
             scale: 1.5,
@@ -286,9 +411,96 @@ export default class GameScene extends Phaser.Scene {
             onComplete: () => fire.destroy()
         });
         
-        // Score
         this.score += 10;
         this.uiManager.updateScore(this.score);
+    }
+    
+    teleportRandom() {
+        const validPositions = [];
+        
+        for (let x = 1; x < 14; x++) {
+            for (let y = 1; y < 10; y++) {
+                if (this.tileMap.isWalkable(x, y)) {
+                    let onSnake = false;
+                    for (const seg of this.snake) {
+                        if (seg.gridX === x && seg.gridY === y) {
+                            onSnake = true;
+                            break;
+                        }
+                    }
+                    if (!onSnake) {
+                        validPositions.push({ x, y });
+                    }
+                }
+            }
+        }
+        
+        if (validPositions.length > 0) {
+            const pos = validPositions[Math.floor(Math.random() * validPositions.length)];
+            
+            const targetX = pos.x * 20 + 10;
+            const targetY = pos.y * 20 + 10;
+            
+            this.tweens.add({
+                targets: this.snake[0].sprite,
+                alpha: 0,
+                scale: 0.5,
+                duration: 150,
+                onComplete: () => {
+                    this.snake[0].gridX = pos.x;
+                    this.snake[0].gridY = pos.y;
+                    this.snake[0].sprite.setPosition(targetX, targetY);
+                    
+                    for (let i = 1; i < this.snake.length; i++) {
+                        const prev = this.snake[i - 1];
+                        this.snake[i].gridX = prev.gridX;
+                        this.snake[i].gridY = prev.gridY;
+                        this.snake[i].sprite.setPosition(
+                            prev.gridX * 20 + 10,
+                            prev.gridY * 20 + 10
+                        );
+                    }
+                    
+                    this.tweens.add({
+                        targets: this.snake[0].sprite,
+                        alpha: 1,
+                        scale: 1,
+                        duration: 150
+                    });
+                    
+                    this.lighting.updatePlayerGlow(targetX, targetY, true);
+                }
+            });
+        }
+    }
+    
+    updateEffects(time, delta) {
+        const now = Date.now();
+        
+        for (let i = this.activeEffects.length - 1; i >= 0; i--) {
+            const effect = this.activeEffects[i];
+            
+            if (now > effect.startTime + effect.duration) {
+                this.currentMoveInterval = this.baseMoveInterval;
+                this.activeEffects.splice(i, 1);
+            }
+        }
+    }
+    
+    updateHeadRotation() {
+        const head = this.snake[0].sprite;
+        
+        const rotationMap = {
+            '1,0': 0,
+            '-1,0': Math.PI,
+            '0,-1': -Math.PI / 2,
+            '0,1': Math.PI / 2
+        };
+        
+        const key = `${this.direction.x},${this.direction.y}`;
+        const targetRotation = rotationMap[key] || 0;
+        
+        head.rotation = targetRotation;
     }
     
     endGame() {
@@ -303,7 +515,9 @@ export default class GameScene extends Phaser.Scene {
         }
         
         this.audioManager.play('gameover');
-        this.cameras.main.shake(500, 0.03);
+        
+        this.cameras.main.shake(300, 0.015);
+        
         this.uiManager.showGameOver(this.score, this.highScore);
     }
     
@@ -315,34 +529,33 @@ export default class GameScene extends Phaser.Scene {
         this.score = 0;
         this.gameOver = false;
         this.isRunning = true;
+        this.baseMoveInterval = 150;
+        this.currentMoveInterval = 150;
+        this.activeEffects = [];
         
-        // Reset jogador
-        this.player.gridX = 1;
-        this.player.gridY = 1;
-        this.player.sprite.setPosition(30, 30);
-        this.lighting.updatePlayerGlow(30, 30, true);
+        this.snakeContainer.destroy();
         
-        // Remover bombas
-        this.bombs.forEach(b => b.sprite.destroy());
-        this.bombs.length = 0;
+        this.dimensionManager.setDimension('NORMAL');
         
-        // Rebuild map
-        this.tileMap.destroy();
-        this.tileMap = new (require('./TileMapManager.js').default)(this);
-        this.tileMap.buildMap();
-        this.tileMap.removeBlock(1, 1);
-        this.tileMap.removeBlock(1, 2);
-        this.tileMap.removeBlock(2, 1);
+        if (this.graphicsOptimizer) {
+            this.graphicsOptimizer.clearAllParticles();
+        }
+        
+        this.createInitialSnake();
+        
+        if (this.foodManager) {
+            this.foodManager.destroy();
+        }
+        this.foodManager = new FoodManager(this);
+        this.foodManager.spawn();
         
         this.uiManager.updateScore(0);
+        
         this.audioManager.play('start');
     }
     
     setupControls() {
         this.input.keyboard.on('keydown', (e) => {
-            if (e.key === ' ' && !this.gameOver && this.isRunning) {
-                this.placeBomb();
-            }
             if (e.key === 'Enter' && (this.gameOver || !this.isRunning)) {
                 this.startGame();
             }
@@ -357,7 +570,7 @@ export default class GameScene extends Phaser.Scene {
     
     getHighScore() {
         try {
-            return parseInt(localStorage.getItem('bomber-highscore') || '0', 10);
+            return parseInt(localStorage.getItem('snake-highscore') || '0', 10);
         } catch {
             return 0;
         }
@@ -365,12 +578,16 @@ export default class GameScene extends Phaser.Scene {
     
     setHighScore(score) {
         try {
-            localStorage.setItem('bomber-highscore', score.toString());
+            localStorage.setItem('snake-highscore', score.toString());
         } catch {}
     }
     
     shutdown() {
         if (this.tileMap) this.tileMap.destroy();
         if (this.lighting) this.lighting.destroy();
+        if (this.visualManager) this.visualManager.destroy();
+        if (this.foodManager) this.foodManager.destroy();
+        if (this.dimensionManager) this.dimensionManager.destroy();
+        if (this.graphicsOptimizer) this.graphicsOptimizer.destroy();
     }
 }

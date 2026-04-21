@@ -239,6 +239,39 @@ export default class LightingManager {
     // LUZ DE BOMBA
     // =====================================
     
+    createFoodLight(x, y) {
+        const light = this.createLightSource(x, y, 35, 0xff4466, 0.6);
+        
+        if (light) {
+            const tween = this.scene.tweens.add({
+                targets: light,
+                scaleX: 1.15,
+                scaleY: 1.15,
+                duration: 400,
+                yoyo: true,
+                repeat: -1
+            });
+            
+            return {
+                light: light,
+                stopPulse: () => {
+                    tween.stop();
+                }
+            };
+        }
+        
+        return null;
+    }
+    
+    removeLight(lightObj) {
+        if (lightObj && lightObj.light) {
+            if (lightObj.stopPulse) {
+                lightObj.stopPulse();
+            }
+            lightObj.light.destroy();
+        }
+    }
+    
     createBombLight(x, y) {
         const light = this.createLightSource(x, y, 40, 0xffaa44, 0.5);
         

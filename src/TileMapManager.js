@@ -17,6 +17,7 @@
 
 import Phaser from 'phaser';
 import GameConfig from './GameConfig.js';
+import AssetManager from './AssetManager.js';
 
 // =====================================
 // TIPOS DE TILES
@@ -93,6 +94,12 @@ export default class TileMapManager {
         // Seed para variação
         this.seed = Date.now();
         
+        // Asset Manager
+        this.assetManager = null;
+        
+        // Estilo do cenário
+        this.style = 'arena';
+        
         // Inicializar
         this.create();
     }
@@ -109,7 +116,8 @@ export default class TileMapManager {
         this.effectContainer.setDepth(100);
         
         // Gerar texturas
-        this.generateTextures();
+        this.assetManager = new AssetManager(this.scene);
+        this.assetManager.createAll();
         
         // Inicializar camadas
         this.initLayers();
@@ -421,11 +429,18 @@ export default class TileMapManager {
         for (let y = 0; y < this.gridHeight; y++) {
             for (let x = 0; x < this.gridWidth; x++) {
                 const variation = this.getVariation(x, y, 4);
+                let textureName = 'floor_' + variation;
+                
+                if (!this.scene.textures.exists(textureName)) {
+                    textureName = 'floor_0';
+                }
+                
                 const sprite = this.scene.add.image(
-                    x * this.tileSize,
-                    y * this.tileSize,
-                    'ground_' + variation
+                    x * this.tileSize + 10,
+                    y * this.tileSize + 10,
+                    textureName
                 );
+                sprite.setOrigin(0, 0);
                 this.groundContainer.add(sprite);
                 this.groundLayer[y][x] = sprite;
             }
@@ -553,12 +568,21 @@ export default class TileMapManager {
         if (gridX < 0 || gridX >= this.gridWidth ||
             gridY < 0 || gridY >= this.gridHeight) return;
         
-        const variation = this.getVariation(gridX, gridY, 3);
+        const textureMap = {
+            'stone': 'wall_indestructible',
+            'metal': 'wall_metal',
+            'wood': 'wall_wood',
+            'destructible': 'wall_destructible'
+        };
+        
+        const textureName = textureMap[type] || 'wall_indestructible';
+        
         const sprite = this.scene.add.image(
-            gridX * this.tileSize,
-            gridY * this.tileSize,
-            type + '_' + variation
+            gridX * this.tileSize + 10,
+            gridY * this.tileSize + 10,
+            textureName
         );
+        sprite.setOrigin(0, 0);
         
         this.objectContainer.add(sprite);
         this.objectLayer[gridY][gridX] = {
@@ -573,11 +597,14 @@ export default class TileMapManager {
         
         if (this.objectLayer[gridY][gridX]) return;
         
+        const textureName = variation === 0 ? 'crate' : 'barrel';
+        
         const sprite = this.scene.add.image(
-            gridX * this.tileSize,
-            gridY * this.tileSize,
-            'block_' + variation
+            gridX * this.tileSize + 10,
+            gridY * this.tileSize + 10,
+            textureName
         );
+        sprite.setOrigin(0, 0);
         
         this.objectContainer.add(sprite);
         this.objectLayer[gridY][gridX] = {
@@ -676,12 +703,21 @@ export default class TileMapManager {
     // =====================================
     
     destroy() {
+        // Limpar asset manager
+        if (this.assetManager) {
+            this.assetManager.destroy();
+            this.assetManager = null;
+        }
+        
         // Limpar texturas
         ['ground_0', 'ground_1', 'ground_2', 'ground_3',
          'stone_0', 'stone_1', 'stone_2',
          'metal_0', 'metal_1', 'metal_2',
          'wood_0', 'wood_1', 'wood_2',
-         'block_0', 'block_1', 'block_2'
+         'block_0', 'block_1', 'block_2',
+         'floor_0', 'floor_1', 'floor_2', 'floor_3',
+         'wall_destructible', 'wall_indestructible', 'wall_metal', 'wall_wood',
+         'crate', 'barrel', 'statue', 'bomb'
         ].forEach(name => {
             if (this.scene.textures.exists(name)) {
                 this.scene.textures.remove(name);
@@ -692,5 +728,41 @@ export default class TileMapManager {
         if (this.groundContainer) this.groundContainer.destroy();
         if (this.objectContainer) this.objectContainer.destroy();
         if (this.effectContainer) this.effectContainer.destroy();
+    }
+    
+    // =====================================
+    // ESTILOS
+    // =====================================
+    
+    setStyle(styleName) {
+        this.style = styleName;
+        
+        if (this.assetManager) {
+            const mapping = {
+                'arena': 'floor_0',
+                'dungeon': 'floor_2',
+                'factory': 'floor_3',
+                'ruins': 'floor_1'
+            };
+            
+            return mapping[styleName] || 'floor_0';
+        }
+        
+        return 'floor_0';
+    }
+    
+    updateColors(dimensionConfig) {
+        if (!dimensionConfig) return;
+        
+        this.dimensionConfig = dimensionConfig;
+        
+        for (let y = 0; y < this.gridHeight; y++) {
+            for (let x = 0; x < this.gridWidth; x++) {
+                const ground = this.groundLayer[y][x];
+                if (ground && ground.setTint) {
+                    ground.setTint(dimensionConfig.floor || 0xffffff);
+                }
+            }
+        }
     }
 }
