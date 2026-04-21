@@ -58,10 +58,31 @@
             background: #00ff00;
             color: #000;
         }
+        
+        /* Botão música */
+        #btnMusica {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 40px;
+            height: 40px;
+            background: #222;
+            border: 2px solid #00ff00;
+            border-radius: 50%;
+            color: #00ff00;
+            font-size: 20px;
+            z-index: 200;
+            cursor: pointer;
+        }
+        #btnMusica:active {
+            background: #00ff00;
+            color: #000;
+        }
     </style>
 </head>
 <body>
     <div id="game-container"></div>
+    <button id="btnMusica" onclick="toggleMusica()">🎵</button>
     
     <div id="controles">
         <div class="linha">
@@ -80,18 +101,55 @@
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
     <script>
 // =====================================
-// SONS RETRO 80s - 8 BITS
+// ÁUDIO RETRO 80s
 // =====================================
 
 var audioCtx = null;
+var musicaTocando = false;
+var musicaInterval = null;
+var notaAtual = 0;
+
+// Notas musicais (frequências em Hz)
+const NOTAS = {
+    C3: 131, D3: 147, E3: 165, F3: 175, G3: 196, A3: 220, B3: 247,
+    C4: 262, D4: 294, E4: 330, F4: 349, G4: 392, A4: 440, B4: 494,
+    C5: 523, D5: 587, E5: 659, F5: 698, G5: 784, A5: 880, B5: 988,
+    C6: 1047, D6: 1175, E6: 1319, F6: 1397, G6: 1568
+};
+
+// Melodia Tetris (direito autoral - exemplo educativo)
+// Usando melodia própria estilo 80s
+var MELODIA = [
+    { n: 'E4', d: 200 }, { n: 'B3', d: 100 }, { n: 'C4', d: 200 }, { n: 'D4', d: 100 },
+    { n: 'C4', d: 200 }, { n: 'B3', d: 100 }, { n: 'A3', d: 200 }, { n: 'A3', d: 100 },
+    { n: 'C4', d: 200 }, { n: 'D4', d: 100 }, { n: 'E4', d: 200 }, { n: 'D4', d: 100 },
+    { n: 'C4', d: 200 }, { n: 'B3', d: 100 }, { n: 'C4', d: 200 }, { n: 'D4', d: 100 },
+    { n: 'E4', d: 200 }, { n: 'C4', d: 100 }, { n: 'A3', d: 200 }, { n: 'A3', d: 100 },
+    { n: 'D4', d: 300 }, { n: 'F4', d: 100 }, { n: 'E4', d: 300 }, { n: 'C4', d: 100 },
+    { n: 'D4', d: 200 }, { n: 'B3', d: 100 }, { n: 'C4', d: 300 }, { n: 'A3', d: 100 },
+    { n: 'G3', d: 400 }
+];
+
+// Segunda melodia (mais energética)
+var MELODIA2 = [
+    { n: 'G4', d: 150 }, { n: 'G4', d: 150 }, { n: 'C4', d: 300 },
+    { n: 'G4', d: 150 }, { n: 'G4', d: 150 }, { n: 'C4', d: 300 },
+    { n: 'G4', d: 200 }, { n: 'D4', d: 200 }, { n: 'G3', d: 400 },
+    { n: 'A4', d: 150 }, { n: 'A4', d: 150 }, { n: 'C4', d: 300 },
+    { n: 'A4', d: 150 }, { n: 'A4', d: 150 }, { n: 'C4', d: 300 },
+    { n: 'G4', d: 300 }, { n: 'D4', d: 100 }, { n: 'G3', d: 400 }
+];
 
 function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
 }
 
-function somRetro(freq, duracao, tipo) {
+function tocarNota(freq, duracao, tipo) {
     if (!audioCtx) return;
     
     var osc = audioCtx.createOscillator();
@@ -103,36 +161,91 @@ function somRetro(freq, duracao, tipo) {
     osc.type = tipo || 'square';
     osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
     
-    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duracao);
+    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duracao / 1000);
     
     osc.start(audioCtx.currentTime);
-    osc.stop(audioCtx.currentTime + duracao);
+    osc.stop(audioCtx.currentTime + duracao / 1000);
+}
+
+// Música de fundo
+function iniciarMusica() {
+    if (musicaTocando) return;
+    
+    initAudio();
+    musicaTocando = true;
+    notaAtual = 0;
+    reproduzirMelodia();
+    document.getElementById('btnMusica').textContent = '🔊';
+}
+
+function reproduzirMelodia() {
+    if (!musicaTocando) return;
+    
+    var melodia = Math.random() > 0.5 ? MELODIA : MELODIA2;
+    var nota = melodia[notaAtual % melodia.length];
+    
+    if (NOTAS[nota.n]) {
+        tocarNota(NOTAS[nota.n], nota.d, 'square');
+    }
+    
+    notaAtual++;
+    musicaInterval = setTimeout(reproduzirMelodia, nota.d);
+}
+
+function pararMusica() {
+    musicaTocando = false;
+    if (musicaInterval) {
+        clearTimeout(musicaInterval);
+        musicaInterval = null;
+    }
+    document.getElementById('btnMusica').textContent = '🎵';
+}
+
+function toggleMusica() {
+    initAudio();
+    if (musicaTocando) {
+        pararMusica();
+    } else {
+        iniciarMusica();
+    }
 }
 
 // Sons do jogo
 function somComer() {
-    somRetro(440, 0.1, 'square');
-    setTimeout(function() { somRetro(660, 0.1, 'square'); }, 50);
-    setTimeout(function() { somRetro(880, 0.15, 'square'); }, 100);
+    if (!audioCtx) return;
+    tocarNota(440, 80, 'square');
+    setTimeout(function() { tocarNota(660, 80, 'square'); }, 40);
+    setTimeout(function() { tocarNota(880, 120, 'square'); }, 80);
 }
 
 function somMover() {
-    somRetro(220, 0.05, 'square');
+    if (!audioCtx) return;
+    tocarNota(220, 40, 'square');
 }
 
 function somGameOver() {
-    somRetro(400, 0.2, 'sawtooth');
-    setTimeout(function() { somRetro(350, 0.2, 'sawtooth'); }, 200);
-    setTimeout(function() { somRetro(300, 0.2, 'sawtooth'); }, 400);
-    setTimeout(function() { somRetro(200, 0.5, 'sawtooth'); }, 600);
+    if (!audioCtx) return;
+    tocarNota(400, 200, 'sawtooth');
+    setTimeout(function() { tocarNota(350, 200, 'sawtooth'); }, 200);
+    setTimeout(function() { tocarNota(300, 200, 'sawtooth'); }, 400);
+    setTimeout(function() { tocarNota(200, 500, 'sawtooth'); }, 600);
 }
 
 function somInicio() {
-    somRetro(262, 0.1, 'square');
-    setTimeout(function() { somRetro(330, 0.1, 'square'); }, 100);
-    setTimeout(function() { somRetro(392, 0.1, 'square'); }, 200);
-    setTimeout(function() { somRetro(523, 0.2, 'square'); }, 300);
+    if (!audioCtx) return;
+    tocarNota(262, 100, 'square');
+    setTimeout(function() { tocarNota(330, 100, 'square'); }, 100);
+    setTimeout(function() { tocarNota(392, 100, 'square'); }, 200);
+    setTimeout(function() { tocarNota(523, 200, 'square'); }, 300);
+}
+
+function somLevelUp() {
+    if (!audioCtx) return;
+    var notas = [523, 659, 784, 1047];
+    notas.forEach(function(n, i) {
+        setTimeout(function() { tocarNota(n, 150, 'square'); }, i * 100);
+    });
 }
 
 // =====================================
@@ -151,12 +264,14 @@ let proximaDirecao = { x: 1, y: 0 };
 let comidaPos = { x: 7, y: 5 };
 let pontuacao = 0;
 let recorde = 0;
+let nivel = 1;
 let fimDeJogo = false;
 let jogando = false;
 let ultimoMovimento = 0;
 let grid = [];
 let comidaSprite = null;
 let menuContainer = null;
+let nivelTexto = null;
 let pontuacaoTexto = null;
 let intervalo = 150;
 
@@ -218,7 +333,7 @@ function moverDireita() { initAudio(); if (jogando && direcao.x !== -1) proximaD
 function criarTexturas() {
     var g = scene.add.graphics();
     
-    // Chão estilo 80s - grades
+    // Chão
     g.clear();
     g.fillStyle(0x1a1a2e, 1);
     g.fillRect(0, 0, 20, 20);
@@ -226,7 +341,7 @@ function criarTexturas() {
     g.strokeRect(0, 0, 20, 20);
     g.generateTexture('chao', 20, 20);
     
-    // Parede estilo 80s - blocos sólid
+    // Parede
     g.clear();
     g.fillStyle(0x00aa00, 1);
     g.fillRect(0, 0, 20, 20);
@@ -237,7 +352,7 @@ function criarTexturas() {
     g.fillRect(11, 11, 6, 6);
     g.generateTexture('parede', 20, 20);
     
-    // Cabeça - estilo retro
+    // Cabeça
     g.clear();
     g.fillStyle(0x00ff00, 1);
     g.fillRect(2, 2, 16, 16);
@@ -257,7 +372,7 @@ function criarTexturas() {
     g.strokeRect(3, 3, 14, 14);
     g.generateTexture('corpo', 20, 20);
     
-    // Comida normal - maçã
+    // Comida normal
     g.clear();
     g.fillStyle(0xff0000, 1);
     g.fillCircle(10, 10, 6);
@@ -267,17 +382,15 @@ function criarTexturas() {
     g.fillCircle(8, 8, 2);
     g.generateTexture('comida', 20, 20);
     
-    // Comida especial - berry azul
+    // Comida especial
     g.clear();
     g.fillStyle(0x4444ff, 1);
     g.fillCircle(10, 10, 6);
     g.fillStyle(0x00ffff, 1);
     g.fillRect(9, 3, 2, 4);
-    g.fillStyle(0xffffff, 1);
-    g.fillCircle(8, 8, 2);
     g.generateTexture('comida_especial', 20, 20);
     
-    // Comida rápida - raio
+    // Comida rápida
     g.clear();
     g.fillStyle(0xffff00, 1);
     g.fillCircle(10, 10, 6);
@@ -362,6 +475,11 @@ function criarComida() {
 }
 
 function criarInterface() {
+    nivelTexto = scene.add.text(230, 5, 'NIVEL: 1', {
+        fontSize: '10px', color: '#00ff00', fontFamily: 'Courier New', fontStyle: 'bold'
+    });
+    nivelTexto.setDepth(50);
+    
     pontuacaoTexto = scene.add.text(10, 5, 'PONTOS: 0', {
         fontSize: '12px', color: '#00ff00', fontFamily: 'Courier New', fontStyle: 'bold'
     });
@@ -455,6 +573,14 @@ function moverCobra() {
         somComer();
         if (pontuacaoTexto) pontuacaoTexto.setText('PONTOS: ' + pontuacao);
         
+        // Subir de nível
+        if (pontuacao % 50 === 0) {
+            nivel++;
+            somLevelUp();
+            if (nivelTexto) nivelTexto.setText('NIVEL: ' + nivel);
+            criarEfeitoNivel(cabeca.x, cabeca.y);
+        }
+        
         criarEfeitoComida(comidaPos.x, comidaPos.y);
         
         var rabo = cobra[cobra.length - 1];
@@ -505,9 +631,29 @@ function criarEfeitoComida(x, y) {
     });
 }
 
+function criarEfeitoNivel(x, y) {
+    for (var i = 0; i < 8; i++) {
+        var angulo = (i / 8) * Math.PI * 2;
+        var part = scene.add.graphics();
+        part.fillStyle(0xffff00, 1);
+        part.fillRect(x * TAMANHO + 8, y * TAMANHO + 8, 4, 4);
+        part.setDepth(35);
+        
+        scene.tweens.add({
+            targets: part,
+            x: x * TAMANHO + 8 + Math.cos(angulo) * 30,
+            y: y * TAMANHO + 8 + Math.sin(angulo) * 30,
+            alpha: 0,
+            duration: 400,
+            onComplete: function() { part.destroy(); }
+        });
+    }
+}
+
 function terminarJogo() {
     fimDeJogo = true;
     jogando = false;
+    pararMusica();
     somGameOver();
     
     if (pontuacao > recorde) {
@@ -524,15 +670,18 @@ function iniciarJogo() {
     if (jogando) return;
     
     pontuacao = 0;
+    nivel = 1;
     fimDeJogo = false;
     jogando = true;
     ultimoMovimento = 0;
     somInicio();
+    iniciarMusica();
     
     cobra.forEach(function(s) { s.sprite.destroy(); });
     criarCobra();
     criarComida();
     if (pontuacaoTexto) pontuacaoTexto.setText('PONTOS: 0');
+    if (nivelTexto) nivelTexto.setText('NIVEL: 1');
     esconderMenu();
 }
     </script>
