@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#1a1a2e">
-    <title>🐍 Cobrinha</title>
+    <title>🐍 Cobrinha 80s</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
             width: 100%; height: 100%;
             overflow: hidden;
             background: #1a1a2e;
-            font-family: system-ui, sans-serif;
+            font-family: 'Courier New', monospace;
             touch-action: none;
             -webkit-user-select: none;
             user-select: none;
@@ -23,7 +23,6 @@
         }
         canvas { display: block !important; }
         
-        /* Controles touch */
         #controles {
             position: fixed;
             bottom: 20px;
@@ -43,33 +42,34 @@
         .botao {
             width: 50px;
             height: 50px;
-            background: #333;
-            border: 2px solid #555;
-            border-radius: 10px;
-            color: #fff;
-            font-size: 20px;
+            background: #222;
+            border: 2px solid #00ff00;
+            border-radius: 8px;
+            color: #00ff00;
+            font-size: 18px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            user-select: none;
         }
         .botao:active {
-            background: #555;
+            background: #00ff00;
+            color: #000;
         }
     </style>
 </head>
 <body>
     <div id="game-container"></div>
     
-    <!-- Controles mobile -->
     <div id="controles">
         <div class="linha">
             <div class="botao" ontouchstart="moverCima()">▲</div>
         </div>
         <div class="linha">
             <div class="botao" ontouchstart="moverEsquerda()">◄</div>
-            <div class="botao" ontouchstart="iniciarJogo()">►</div>
+            <div class="botao" ontouchstart="iniciarJogo()">OK</div>
             <div class="botao" ontouchstart="moverDireita()">►</div>
         </div>
         <div class="linha">
@@ -80,7 +80,63 @@
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
     <script>
 // =====================================
-// JOGO DA COBRINHA
+// SONS RETRO 80s - 8 BITS
+// =====================================
+
+var audioCtx = null;
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+}
+
+function somRetro(freq, duracao, tipo) {
+    if (!audioCtx) return;
+    
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    osc.type = tipo || 'square';
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duracao);
+    
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + duracao);
+}
+
+// Sons do jogo
+function somComer() {
+    somRetro(440, 0.1, 'square');
+    setTimeout(function() { somRetro(660, 0.1, 'square'); }, 50);
+    setTimeout(function() { somRetro(880, 0.15, 'square'); }, 100);
+}
+
+function somMover() {
+    somRetro(220, 0.05, 'square');
+}
+
+function somGameOver() {
+    somRetro(400, 0.2, 'sawtooth');
+    setTimeout(function() { somRetro(350, 0.2, 'sawtooth'); }, 200);
+    setTimeout(function() { somRetro(300, 0.2, 'sawtooth'); }, 400);
+    setTimeout(function() { somRetro(200, 0.5, 'sawtooth'); }, 600);
+}
+
+function somInicio() {
+    somRetro(262, 0.1, 'square');
+    setTimeout(function() { somRetro(330, 0.1, 'square'); }, 100);
+    setTimeout(function() { somRetro(392, 0.1, 'square'); }, 200);
+    setTimeout(function() { somRetro(523, 0.2, 'square'); }, 300);
+}
+
+// =====================================
+// JOGO
 // =====================================
 
 const TAMANHO = 20;
@@ -104,9 +160,9 @@ let menuContainer = null;
 let pontuacaoTexto = null;
 let intervalo = 150;
 
-// =====================================
-// INICIALIZAÇÃO
-// =====================================
+// Iniciar audio com primeiro toque
+document.addEventListener('click', initAudio, { once: true });
+document.addEventListener('touchstart', initAudio, { once: true });
 
 new Phaser.Game({
     type: Phaser.AUTO,
@@ -134,10 +190,6 @@ function criar() {
     scene.input.on('pointerdown', iniciarJogo);
 }
 
-// =====================================
-// CONTROLES
-// =====================================
-
 function tratarTecla(e) {
     if (!jogando) {
         if (e.key === 'Enter' || e.code === 'Space') iniciarJogo();
@@ -158,94 +210,84 @@ function tratarTecla(e) {
     }
 }
 
-// Controles mobile
-function moverCima() { if (jogando && direcao.y !== 1) proximaDirecao = { x: 0, y: -1 }; }
-function moverBaixo() { if (jogando && direcao.y !== -1) proximaDirecao = { x: 0, y: 1 }; }
-function moverEsquerda() { if (jogando && direcao.x !== 1) proximaDirecao = { x: -1, y: 0 }; }
-function moverDireita() { if (jogando && direcao.x !== -1) proximaDirecao = { x: 1, y: 0 }; }
-
-// =====================================
-// TEXTURAS
-// =====================================
+function moverCima() { initAudio(); if (jogando && direcao.y !== 1) proximaDirecao = { x: 0, y: -1 }; }
+function moverBaixo() { initAudio(); if (jogando && direcao.y !== -1) proximaDirecao = { x: 0, y: 1 }; }
+function moverEsquerda() { initAudio(); if (jogando && direcao.x !== 1) proximaDirecao = { x: -1, y: 0 }; }
+function moverDireita() { initAudio(); if (jogando && direcao.x !== -1) proximaDirecao = { x: 1, y: 0 }; }
 
 function criarTexturas() {
     var g = scene.add.graphics();
     
-    // Chão
+    // Chão estilo 80s - grades
     g.clear();
-    g.fillStyle(0x252540, 1);
+    g.fillStyle(0x1a1a2e, 1);
     g.fillRect(0, 0, 20, 20);
-    g.fillStyle(0x2a2a45, 0.3);
-    g.fillCircle(5, 5, 2);
-    g.fillCircle(15, 15, 2);
+    g.lineStyle(1, 0x333366, 0.5);
+    g.strokeRect(0, 0, 20, 20);
     g.generateTexture('chao', 20, 20);
     
-    // Parede
+    // Parede estilo 80s - blocos sólid
     g.clear();
-    g.fillStyle(0x2d2d4a, 1);
-    g.fillRect(1, 1, 18, 18);
-    g.fillStyle(0x1d1d2a, 0.5);
-    g.fillRect(1, 14, 18, 5);
-    g.lineStyle(1, 0x000000, 0.3);
+    g.fillStyle(0x00aa00, 1);
+    g.fillRect(0, 0, 20, 20);
+    g.lineStyle(2, 0x00ff00, 1);
     g.strokeRect(1, 1, 18, 18);
+    g.fillStyle(0x004400, 1);
+    g.fillRect(3, 3, 6, 6);
+    g.fillRect(11, 11, 6, 6);
     g.generateTexture('parede', 20, 20);
     
-    // Cabeça
+    // Cabeça - estilo retro
     g.clear();
-    g.fillStyle(0x3d6a4d, 1);
-    g.fillCircle(10, 10, 9);
-    g.fillStyle(0x4d7a5d, 0.4);
-    g.fillCircle(8, 8, 4);
-    g.fillStyle(0xeeeeee, 1);
-    g.fillCircle(7, 8, 3);
-    g.fillCircle(13, 8, 3);
-    g.fillStyle(0x111111, 1);
-    g.fillCircle(7, 9, 2);
-    g.fillCircle(13, 9, 2);
+    g.fillStyle(0x00ff00, 1);
+    g.fillRect(2, 2, 16, 16);
+    g.fillStyle(0x00cc00, 1);
+    g.fillRect(4, 4, 5, 5);
+    g.fillRect(11, 4, 5, 5);
+    g.fillStyle(0x000000, 1);
+    g.fillRect(5, 6, 3, 3);
+    g.fillRect(12, 6, 3, 3);
     g.generateTexture('cabeca', 20, 20);
     
     // Corpo
     g.clear();
-    g.fillStyle(0x2d5a3d, 1);
-    g.fillCircle(10, 10, 8);
-    g.fillStyle(0x4d7a5d, 0.25);
-    g.fillCircle(7, 7, 2);
+    g.fillStyle(0x00dd00, 1);
+    g.fillRect(3, 3, 14, 14);
+    g.lineStyle(1, 0x009900, 0.5);
+    g.strokeRect(3, 3, 14, 14);
     g.generateTexture('corpo', 20, 20);
     
-    // Comida normal
+    // Comida normal - maçã
     g.clear();
-    g.fillStyle(0xff3344, 1);
-    g.fillCircle(10, 10, 7);
-    g.fillStyle(0xff5566, 0.6);
-    g.fillCircle(8, 8, 4);
-    g.fillStyle(0xffffff, 0.5);
-    g.fillCircle(7, 6, 2);
+    g.fillStyle(0xff0000, 1);
+    g.fillCircle(10, 10, 6);
+    g.fillStyle(0x00ff00, 1);
+    g.fillRect(9, 3, 2, 4);
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(8, 8, 2);
     g.generateTexture('comida', 20, 20);
     
-    // Comida especial (azul)
+    // Comida especial - berry azul
     g.clear();
-    g.fillStyle(0x5599ff, 1);
-    g.fillCircle(10, 10, 7);
-    g.fillStyle(0x77aaff, 0.6);
-    g.fillCircle(8, 8, 4);
-    g.fillStyle(0xaaccff, 0.5);
-    g.fillCircle(7, 6, 2);
+    g.fillStyle(0x4444ff, 1);
+    g.fillCircle(10, 10, 6);
+    g.fillStyle(0x00ffff, 1);
+    g.fillRect(9, 3, 2, 4);
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(8, 8, 2);
     g.generateTexture('comida_especial', 20, 20);
     
-    // Comida rápida (amarelo)
+    // Comida rápida - raio
     g.clear();
-    g.fillStyle(0xffdd44, 1);
-    g.fillCircle(10, 10, 7);
-    g.fillStyle(0xffee66, 0.6);
-    g.fillCircle(8, 8, 4);
+    g.fillStyle(0xffff00, 1);
+    g.fillCircle(10, 10, 6);
+    g.fillStyle(0xff8800, 1);
+    g.fillRect(6, 6, 8, 2);
+    g.fillRect(10, 8, 2, 6);
     g.generateTexture('comida_rapida', 20, 20);
     
     g.destroy();
 }
-
-// =====================================
-// MAPA
-// =====================================
 
 function criarGrid() {
     grid = [];
@@ -274,10 +316,6 @@ function desenharGrid() {
         }
     }
 }
-
-// =====================================
-// COBRA
-// =====================================
 
 function criarCobra() {
     cobra = [];
@@ -311,8 +349,8 @@ function criarComida() {
     
     if (comidaSprite) comidaSprite.destroy();
     
-    // Escolher tipo de comida (10% especial)
-    var tipo = Math.random() < 0.1 ? (Math.random() < 0.5 ? 'comida_especial' : 'comida_rapida') : 'comida';
+    var tipo = Math.random() < 0.1 ? 'comida_especial' : 
+              (Math.random() < 0.5 ? 'comida_rapida' : 'comida');
     
     comidaSprite = scene.add.image(
         comidaPos.x * TAMANHO + 10,
@@ -323,37 +361,44 @@ function criarComida() {
     comidaSprite.setDepth(15);
 }
 
-// =====================================
-// INTERFACE
-// =====================================
-
 function criarInterface() {
-    pontuacaoTexto = scene.add.text(10, 5, 'Pontos: 0', {
-        fontSize: '12px', color: '#ffffff', fontFamily: 'system-ui'
+    pontuacaoTexto = scene.add.text(10, 5, 'PONTOS: 0', {
+        fontSize: '12px', color: '#00ff00', fontFamily: 'Courier New', fontStyle: 'bold'
     });
     pontuacaoTexto.setDepth(50);
     
     menuContainer = scene.add.container(150, 110);
     menuContainer.setDepth(100);
     
-    var fundo = scene.add.rectangle(0, 0, 180, 100, 0x000000, 0.85);
+    var fundo = scene.add.rectangle(0, 0, 180, 100, 0x000000, 0.9);
     fundo.setOrigin(0.5);
     menuContainer.add(fundo);
     
-    var titulo = scene.add.text(0, -30, '🐍 COBRINHA', {
-        fontSize: '20px', color: '#44ff88', fontFamily: 'system-ui', fontStyle: 'bold'
+    var borda = scene.add.rectangle(0, 0, 180, 100);
+    borda.setOrigin(0.5);
+    borda.setStrokeStyle(2, 0x00ff00);
+    menuContainer.add(borda);
+    
+    var titulo = scene.add.text(0, -35, 'COBRINHA', {
+        fontSize: '24px', color: '#00ff00', fontFamily: 'Courier New', fontStyle: 'bold'
     });
     titulo.setOrigin(0.5);
     menuContainer.add(titulo);
     
-    var instrucao = scene.add.text(0, 0, 'Toque ou Enter', {
-        fontSize: '12px', color: '#aaaaaa', fontFamily: 'system-ui'
+    var sub = scene.add.text(0, -5, 'EDITION 1985', {
+        fontSize: '10px', color: '#008800', fontFamily: 'Courier New'
+    });
+    sub.setOrigin(0.5);
+    menuContainer.add(sub);
+    
+    var instrucao = scene.add.text(0, 15, 'TOQUE OU ENTER', {
+        fontSize: '12px', color: '#00ff00', fontFamily: 'Courier New'
     });
     instrucao.setOrigin(0.5);
     menuContainer.add(instrucao);
     
-    var alto = scene.add.text(0, 25, 'Recorde: ' + recorde, {
-        fontSize: '11px', color: '#888888', fontFamily: 'system-ui'
+    var alto = scene.add.text(0, 35, 'RECORDE: ' + recorde, {
+        fontSize: '11px', color: '#008800', fontFamily: 'Courier New'
     });
     alto.setOrigin(0.5);
     menuContainer.add(alto);
@@ -364,10 +409,6 @@ function criarInterface() {
 function mostrarMenu() { if (menuContainer) menuContainer.setVisible(true); }
 function esconderMenu() { if (menuContainer) menuContainer.setVisible(false); }
 
-// =====================================
-// JOGO
-// =====================================
-
 function atualizar(tempo) {
     if (fimDeJogo || !jogando) return;
     
@@ -377,9 +418,8 @@ function atualizar(tempo) {
         moverCobra();
     }
     
-    // Animar comida
     if (comidaSprite) {
-        comidaSprite.setScale(1 + Math.sin(tempo / 200) * 0.1);
+        comidaSprite.setScale(1 + Math.sin(tempo / 200) * 0.15);
     }
 }
 
@@ -406,11 +446,14 @@ function moverCobra() {
         }
     }
     
+    somMover();
+    
     var comeu = (novoX === comidaPos.x && novoY === comidaPos.y);
     
     if (comeu) {
         pontuacao += 10;
-        if (pontuacaoTexto) pontuacaoTexto.setText('Pontos: ' + pontuacao);
+        somComer();
+        if (pontuacaoTexto) pontuacaoTexto.setText('PONTOS: ' + pontuacao);
         
         criarEfeitoComida(comidaPos.x, comidaPos.y);
         
@@ -449,15 +492,15 @@ function moverCobra() {
 
 function criarEfeitoComida(x, y) {
     var efeito = scene.add.graphics();
-    efeito.fillStyle(0xffffff, 0.8);
-    efeito.fillCircle(x * TAMANHO + 10, y * TAMANHO + 10, 10);
+    efeito.fillStyle(0xffffff, 1);
+    efeito.fillRect(x * TAMANHO + 2, y * TAMANHO + 2, 16, 16);
     efeito.setDepth(30);
     
     scene.tweens.add({
         targets: efeito,
         alpha: 0,
-        scale: 2,
-        duration: 300,
+        scale: 1.5,
+        duration: 200,
         onComplete: function() { efeito.destroy(); }
     });
 }
@@ -465,28 +508,31 @@ function criarEfeitoComida(x, y) {
 function terminarJogo() {
     fimDeJogo = true;
     jogando = false;
+    somGameOver();
     
     if (pontuacao > recorde) {
         recorde = pontuacao;
         localStorage.setItem('snake-recorde', recorde.toString());
     }
     
-    scene.cameras.main.shake(200, 0.01);
+    scene.cameras.main.shake(300, 0.02);
     mostrarMenu();
 }
 
 function iniciarJogo() {
+    initAudio();
     if (jogando) return;
     
     pontuacao = 0;
     fimDeJogo = false;
     jogando = true;
     ultimoMovimento = 0;
+    somInicio();
     
     cobra.forEach(function(s) { s.sprite.destroy(); });
     criarCobra();
     criarComida();
-    if (pontuacaoTexto) pontuacaoTexto.setText('Pontos: 0');
+    if (pontuacaoTexto) pontuacaoTexto.setText('PONTOS: 0');
     esconderMenu();
 }
     </script>
