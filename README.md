@@ -35,6 +35,9 @@ npx http-server -c-1 -p 8080
 # http://localhost:8080
 ```
 
+> ✅ O `index.html` agora inicia por padrão a versão modular (`src/main.js`).  
+> 🔁 Para abrir a versão inline legada, use: `http://localhost:8080?legacy=1`.
+
 ### 2. Testar Local com Arquivos
 
 Basta abrir o `index.html` diretamente no navegador.

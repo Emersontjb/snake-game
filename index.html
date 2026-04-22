@@ -99,6 +99,23 @@
     
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
     <script>
+const useLegacyMode = new URLSearchParams(window.location.search).get('legacy') === '1';
+
+if (!useLegacyMode) {
+    const controlsEl = document.getElementById('controles');
+    const musicButtonEl = document.getElementById('btnMusica');
+    if (controlsEl) controlsEl.style.display = 'none';
+    if (musicButtonEl) musicButtonEl.style.display = 'none';
+
+    const moduleEntry = document.createElement('script');
+    moduleEntry.type = 'module';
+    moduleEntry.src = './src/main.js';
+    document.body.appendChild(moduleEntry);
+
+    console.log('🐍 Modo modular ativo (src/main.js). Use ?legacy=1 para o modo inline.');
+}
+
+if (useLegacyMode) {
 // =====================================
 // ÁUDIO RETRO 80s
 // =====================================
@@ -845,6 +862,7 @@ requestAnimationFrame(function(timestamp) {
     lastTime = timestamp;
     requestAnimationFrame(gameLoop);
 });
+}
     </script>
 </body>
 </html>
