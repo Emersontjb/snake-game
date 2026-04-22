@@ -12,6 +12,11 @@ import SnakeVisualManager from './SnakeVisualManager.js';
 import FoodManager from './FoodManager.js';
 import DimensionManager from './DimensionManager.js';
 import GraphicsOptimizer from './GraphicsOptimizer.js';
+import TileMapManager from './TileMapManager.js';
+import LightingManager from './LightingManager.js';
+import Controls from './Controls.js';
+import AudioManager from './AudioManager.js';
+import UIManager from './UIManager.js';
 
 const COLORS = {
     PLAYER: 0x3d6a4d,
@@ -44,6 +49,7 @@ export default class GameScene extends Phaser.Scene {
         this.isRunning = false;
         
         this.activeEffects = [];
+        this.motionTime = 0;
     }
     
     create() {
@@ -51,10 +57,10 @@ export default class GameScene extends Phaser.Scene {
         
         this.highScore = this.getHighScore();
         
-        this.tileMap = new (require('./TileMapManager.js').default)(this);
+        this.tileMap = new TileMapManager(this);
         this.tileMap.buildMap();
         
-        this.lighting = new (require('./LightingManager.js').default)(this, {
+        this.lighting = new LightingManager(this, {
             ambient: { r: 0.08, g: 0.1, b: 0.12 },
             ambientIntensity: 0.4
         });
@@ -69,9 +75,9 @@ export default class GameScene extends Phaser.Scene {
         
         this.foodManager = new FoodManager(this);
         
-        this.controls = new (require('./Controls.js').default)(this);
-        this.audioManager = new (require('./AudioManager.js').default)(this);
-        this.uiManager = new (require('./UIManager.js').default)(this);
+        this.controls = new Controls(this);
+        this.audioManager = new AudioManager(this);
+        this.uiManager = new UIManager(this);
         
         this.createInitialSnake();
         this.foodManager.spawn();
@@ -118,55 +124,26 @@ export default class GameScene extends Phaser.Scene {
     }
     
     createSnakeSegment(type, index) {
-        const graphics = this.add.graphics();
+        const container = this.add.container(0, 0);
         
-        const x = 0;
-        const y = 0;
+        const shadow = this.add.ellipse(1.5, 2.5, 15, 8, 0x000000, 0.28);
+        shadow.setBlendMode(Phaser.BlendModes.MULTIPLY);
         
-        if (type === 'head') {
-            graphics.fillStyle(0x3d6a4d, 1);
-            graphics.fillCircle(x, y, 9);
-            
-            graphics.fillStyle(0x4d7a5d, 0.4);
-            graphics.fillCircle(x - 2, y - 2, 4);
-            
-            graphics.fillStyle(0xeeeeee, 1);
-            graphics.fillCircle(x - 3, y - 3, 3);
-            graphics.fillCircle(x + 3, y - 3, 3);
-            
-            graphics.fillStyle(0x111111, 1);
-            graphics.fillCircle(x - 3, y - 2, 2);
-            graphics.fillCircle(x + 3, y - 2, 2);
-            
-            graphics.fillStyle(0xffffff, 0.9);
-            graphics.fillCircle(x - 4, y - 4, 1);
-            graphics.fillCircle(x + 2, y - 4, 1);
-        } else {
-            const variation = index % 3;
-            const baseColor = variation === 0 ? 0x2d5a3d :
-                             variation === 1 ? 0x3d6a4d : 0x1d4a2d;
-            
-            graphics.fillStyle(baseColor, 1);
-            graphics.fillCircle(x, y, 8);
-            
-            graphics.fillStyle(0x4d7a5d, 0.25);
-            for (let i = 0; i < 3; i++) {
-                const sx = (Math.random() - 0.5) * 12;
-                const sy = (Math.random() - 0.5) * 12;
-                graphics.fillCircle(x + sx, y + sy, 2);
-            }
-            
-            graphics.fillStyle(0x5d8a6d, 0.2);
-            graphics.fillCircle(x - 2, y - 2, 2);
-        }
+        const segmentSprite = this.visualManager.createSegment(type, index);
+        segmentSprite.setDisplaySize(18, 18);
         
-        graphics.setDepth(20);
+        container.add([shadow, segmentSprite]);
+        container.segmentSprite = segmentSprite;
+        container.shadowSprite = shadow;
+        container.setDepth(20);
         
-        return graphics;
+        return container;
     }
     
     update(time, delta) {
         if (this.gameOver || !this.isRunning) return;
+        
+        this.motionTime += delta;
         
         const inputDir = this.controls.getDirection();
         
@@ -192,6 +169,8 @@ export default class GameScene extends Phaser.Scene {
         if (this.graphicsOptimizer) {
             this.graphicsOptimizer.updateParticles(delta);
         }
+        
+        this.applyRealisticMotion();
     }
     
     moveSnake() {
@@ -318,7 +297,7 @@ export default class GameScene extends Phaser.Scene {
         const flash = this.add.graphics();
         
         flash.fillStyle(0xffffff, 0.4);
-        flash.fillRect(0, 0, 300, 220);
+        flash.fillRect(0, 0, this.scale.width, this.scale.height);
         
         flash.setDepth(200);
         
@@ -501,6 +480,38 @@ export default class GameScene extends Phaser.Scene {
         const targetRotation = rotationMap[key] || 0;
         
         head.rotation = targetRotation;
+    }
+    
+    applyRealisticMotion() {
+        if (!this.snake || this.snake.length === 0) return;
+        
+        const speedFactor = Phaser.Math.Clamp(150 / this.currentMoveInterval, 0.8, 1.8);
+        const breathe = Math.sin(this.motionTime * 0.005) * 0.02 * speedFactor;
+        
+        this.snake.forEach((segment, index) => {
+            const isHead = index === 0;
+            const phase = this.motionTime * 0.006 - index * 0.5;
+            const wave = Math.sin(phase) * 0.035 * speedFactor;
+            const pulse = Math.sin(this.motionTime * 0.004 + index * 0.25) * 0.012;
+            
+            const scaleX = 1 + wave + (isHead ? breathe : pulse);
+            const scaleY = 1 - wave * 0.5 + (isHead ? pulse : 0);
+            segment.sprite.setScale(scaleX, scaleY);
+            
+            if (segment.sprite.shadowSprite) {
+                segment.sprite.shadowSprite.setAlpha(0.2 + Math.abs(wave) * 0.6);
+                segment.sprite.shadowSprite.setScale(1 + Math.abs(wave) * 0.5, 1);
+            }
+            
+            if (isHead && segment.sprite.segmentSprite) {
+                segment.sprite.segmentSprite.setTint(
+                    COLORS.PLAYER,
+                    COLORS.PLAYER_DETAIL,
+                    COLORS.PLAYER_DETAIL,
+                    COLORS.PLAYER
+                );
+            }
+        });
     }
     
     endGame() {
